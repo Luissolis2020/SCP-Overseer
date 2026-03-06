@@ -1,0 +1,13 @@
+// 1.20.1	2026-01-22T00:03:05.5513994	Block States: scpmod
+e9f4092920b872724c329aa894f726d4bf354dff assets/scpmod/blockstates/raw_sapphire_block.json
+a46490cf6de9b1c7b110a5786768e0950dd85c39 assets/scpmod/blockstates/sapphire_block.json
+f9753bb03711db046b80d5573ab73ab00dd6422b assets/scpmod/blockstates/sapphire_ore.json
+ef28fe1207008b5fd0746510d5e24c22c4a02c70 assets/scpmod/blockstates/scp_124.json
+84032da34fcd3b7e726bfd3b0e230ddb0d76dd0f assets/scpmod/models/block/raw_sapphire_block.json
+2a2f92c036f35d5ab441ae2b5b73e4d0df2b5c49 assets/scpmod/models/block/sapphire_block.json
+a6d29509a6c9cd0f8ac47f7c40336d2c53f16099 assets/scpmod/models/block/sapphire_ore.json
+cd7e392151a9814b62e4b6bcd89a54b79a4b020e assets/scpmod/models/block/scp_124.json
+e790ad00e3d39a5b56e947fca1b7408a1766691b assets/scpmod/models/item/raw_sapphire_block.json
+af7badc2bbbb470d639e7227610c82a9b8858703 assets/scpmod/models/item/sapphire_block.json
+a6e93719a9b390708ae1e78ed0aa408df162d58f assets/scpmod/models/item/sapphire_ore.json
+548ce049708be9f37f0fc76977b8f67e891fc11e assets/scpmod/models/item/scp_124.json

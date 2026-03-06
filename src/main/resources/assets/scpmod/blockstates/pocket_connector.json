@@ -1,0 +1,38 @@
+{
+  "variants": {
+    "facing=north,ctype=ANY": { "model": "minecraft:block/air" },
+    "facing=east,ctype=ANY":  { "model": "minecraft:block/air" },
+    "facing=south,ctype=ANY": { "model": "minecraft:block/air" },
+    "facing=west,ctype=ANY":  { "model": "minecraft:block/air" },
+
+    "facing=north,ctype=HALL": { "model": "minecraft:block/air" },
+    "facing=east,ctype=HALL":  { "model": "minecraft:block/air" },
+    "facing=south,ctype=HALL": { "model": "minecraft:block/air" },
+    "facing=west,ctype=HALL":  { "model": "minecraft:block/air" },
+
+    "facing=north,ctype=ROOM": { "model": "minecraft:block/air" },
+    "facing=east,ctype=ROOM":  { "model": "minecraft:block/air" },
+    "facing=south,ctype=ROOM": { "model": "minecraft:block/air" },
+    "facing=west,ctype=ROOM":  { "model": "minecraft:block/air" },
+
+    "facing=north,ctype=TRAP": { "model": "minecraft:block/air" },
+    "facing=east,ctype=TRAP":  { "model": "minecraft:block/air" },
+    "facing=south,ctype=TRAP": { "model": "minecraft:block/air" },
+    "facing=west,ctype=TRAP":  { "model": "minecraft:block/air" },
+
+    "facing=north,ctype=EXIT": { "model": "minecraft:block/air" },
+    "facing=east,ctype=EXIT":  { "model": "minecraft:block/air" },
+    "facing=south,ctype=EXIT": { "model": "minecraft:block/air" },
+    "facing=west,ctype=EXIT":  { "model": "minecraft:block/air" },
+
+    "facing=north,ctype=START": { "model": "minecraft:block/air" },
+    "facing=east,ctype=START":  { "model": "minecraft:block/air" },
+    "facing=south,ctype=START": { "model": "minecraft:block/air" },
+    "facing=west,ctype=START":  { "model": "minecraft:block/air" },
+
+    "facing=north,ctype=DEAD_END": { "model": "minecraft:block/air" },
+    "facing=east,ctype=DEAD_END":  { "model": "minecraft:block/air" },
+    "facing=south,ctype=DEAD_END": { "model": "minecraft:block/air" },
+    "facing=west,ctype=DEAD_END":  { "model": "minecraft:block/air" }
+  }
+}

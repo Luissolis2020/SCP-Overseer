@@ -1,0 +1,25 @@
+{
+  "displayName": "SCP-049 Containment Room",
+  "width": 13,
+  "height": 5,
+  "depth": 10,
+  "structureFile": "scpmod:scp_049_containment_room",
+  "requiredMaterials": {
+    "scpmod:light_containment_lower": 45,
+    "minecraft:lever": 3,
+    "scpmod:light_containment_middle": 90,
+    "scpmod:light_containment_floor": 82,
+    "scpmod:light_containment_upper": 48,
+    "scpmod:light_containment_light": 12,
+    "minecraft:glass_pane": 3,
+    "minecraft:dirt": 38,
+    "scpmod:light_containment_ceiling": 60,
+    "minecraft:iron_door": 6,
+    "minecraft:grass_block": 10,
+    "minecraft:white_bed": 2
+  },
+  "zones": {
+    "containment": [1, 0, 1, 5, 4, 8],
+    "observation": [6, 0, 1, 12, 4, 8]
+  }
+}

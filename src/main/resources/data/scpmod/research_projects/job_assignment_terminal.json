@@ -1,0 +1,20 @@
+{
+  "id": "job_assignment_terminal",
+  "category": "PERSONNEL",
+
+  "name": "Job Assignment Terminal",
+  "desc": "Allows manual assignment of staff.",
+
+  "cost": 200,
+  "sort": 10,
+
+  "requires": [
+    "facility_access"
+  ],
+
+  "meta": {
+    "tier": 1,
+    "hidden_until_prereq": false,
+    "repeatable": false
+  }
+}

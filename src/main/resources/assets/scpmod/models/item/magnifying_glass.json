@@ -1,0 +1,18 @@
+{
+  "parent": "minecraft:item/handheld",
+  "loader": "forge:separate_transforms",
+  "base": {
+    "parent": "scpmod:item/magnifying_glass_2d"
+  },
+  "perspectives": {
+    "gui": {
+      "parent": "scpmod:item/magnifying_glass_2d"
+    },
+    "ground": {
+      "parent": "scpmod:item/magnifying_glass_2d"
+    },
+    "fixed": {
+      "parent": "scpmod:item/magnifying_glass_2d"
+    }
+  }
+}

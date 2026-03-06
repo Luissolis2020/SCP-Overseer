@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "net.luis.scpmod.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "LivingEntityAccessor",
+    "LivingEntityMixin",
+    "PlayerMixin",
+    "StructureTemplateAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "verbose": true
+}

@@ -1,0 +1,20 @@
+{
+  "id": "field_scanner_upgrade_1",
+  "category": "EQUIPMENT",
+
+  "name": "Signal Tracking Compass",
+  "desc": "Points toward last detected anomaly.",
+
+  "cost": 75,
+  "sort": 10,
+
+  "requires": [
+    "facility_access"
+  ],
+
+  "meta": {
+    "tier": 1,
+    "hidden_until_prereq": false,
+    "repeatable": false
+  }
+}

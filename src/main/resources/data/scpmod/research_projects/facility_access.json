@@ -1,0 +1,18 @@
+{
+  "id": "facility_access",
+  "category": "FACILITY",
+
+  "name": "Builder Protocols I",
+  "desc": "Unlocks basic facility operations.",
+
+  "cost": 100,
+  "sort": 10,
+
+  "requires": [],
+
+  "meta": {
+    "tier": 1,
+    "hidden_until_prereq": false,
+    "repeatable": false
+  }
+}

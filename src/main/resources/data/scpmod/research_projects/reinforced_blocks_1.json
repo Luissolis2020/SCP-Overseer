@@ -1,0 +1,20 @@
+{
+  "id": "reinforced_blocks_1",
+  "category": "CONTAINMENT",
+
+  "name": "Reinforced Blocks",
+  "desc": "Unlocks containment-grade materials.",
+
+  "cost": 150,
+  "sort": 10,
+
+  "requires": [
+    "facility_access"
+  ],
+
+  "meta": {
+    "tier": 1,
+    "hidden_until_prereq": false,
+    "repeatable": false
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "lit=true": { "model": "scpmod:block/corroded_light_e" },
+    "lit=false": { "model": "scpmod:block/corroded_light" }
+  }
+}

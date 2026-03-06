@@ -1,0 +1,12 @@
+{
+  "displayName": "Basic Containment Room",
+  "width": 7,
+  "height": 5,
+  "depth": 7,
+  "structureFile": "scpmod:containment_basic",
+  "requiredMaterials": {
+    "minecraft:iron_block": 202,
+    "minecraft:glass": 15,
+    "minecraft:iron_door": 1
+  }
+}

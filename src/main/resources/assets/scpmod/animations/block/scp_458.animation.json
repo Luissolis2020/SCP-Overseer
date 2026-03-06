@@ -1,0 +1,96 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"Opening": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.75,
+			"bones": {
+				"Pizzer box": {
+					"position": {
+						"vector": [0, 0, 0]
+					}
+				},
+				"Lid": {
+					"rotation": {
+						"0.0": {
+							"vector": [0, 0, 0]
+						},
+						"0.75": {
+							"vector": [-52.5, 0, 0],
+							"easing": "easeOutBack"
+						}
+					},
+					"position": {
+						"vector": [0, 0, 0]
+					}
+				}
+			}
+		},
+		"Finished": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.75,
+			"bones": {
+				"pizzer": {
+					"scale": {
+						"0.0": {
+							"vector": [1, 1, 1]
+						},
+						"0.75": {
+							"vector": [0, 1, 0]
+						}
+					}
+				},
+				"Lid": {
+					"rotation": {
+						"vector": [-55, 0, 0]
+					},
+					"position": {
+						"vector": [0, -0.1, 0.2]
+					}
+				}
+			},
+			"particle_effects": {
+				"0.0": {
+					"effect": "smoke"
+				}
+			}
+		},
+		"Closing": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.75,
+			"bones": {
+				"Pizzer box": {
+					"position": {
+						"vector": [0, 0, 0]
+					}
+				},
+				"pizzer": {
+					"scale": {
+						"vector": [0, 1, 0]
+					}
+				},
+				"Lid": {
+					"rotation": {
+						"0.0": {
+							"vector": [-54.5, 0, 0]
+						},
+						"0.75": {
+							"vector": [0, 0, 0],
+							"easing": "easeInOutCirc"
+						}
+					},
+					"position": {
+						"0.0": {
+							"vector": [0, -0.1, 0.2]
+						},
+						"0.75": {
+							"vector": [0, 0, 0],
+							"easing": "linear"
+						}
+					}
+				}
+			}
+		}
+	},
+	"geckolib_format_version": 2
+}

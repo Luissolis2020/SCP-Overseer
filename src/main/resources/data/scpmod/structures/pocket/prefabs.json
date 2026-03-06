@@ -1,0 +1,33 @@
+{
+  "start": { "id": "scpmod:pocket/special/start_room", "weight": 1 },
+
+  "exit": [
+    { "id": "scpmod:pocket/special/exit_room_01", "weight": 1 }
+  ],
+
+  "halls": [
+    { "id": "scpmod:pocket/halls/hall_straight_01", "weight": 10 },
+    { "id": "scpmod:pocket/halls/hall_corner_01",  "weight": 8 },
+    { "id": "scpmod:pocket/halls/hall_t_01",       "weight": 5 },
+    { "id": "scpmod:pocket/halls/hall_x_01",       "weight": 4 },
+    { "id": "scpmod:pocket/halls/hall_multi_01",   "weight": 1 },
+    { "id": "scpmod:pocket/halls/hall_stairs_01",   "weight": 3 },
+    { "id": "scpmod:pocket/halls/hall_narrow_01",       "weight": 3},
+    { "id": "scpmod:pocket/halls/hall_narrow_02",   "weight": 2 },
+    { "id": "scpmod:pocket/halls/hall_narrow_03",   "weight": 2 }
+  ],
+
+  "rooms": [
+    { "id": "scpmod:pocket/rooms/prison_01",      "weight": 5 },
+    { "id": "scpmod:pocket/rooms/column_room_01", "weight": 3 },
+    { "id": "scpmod:pocket/rooms/room_canteen_01", "weight": 2 }
+  ],
+
+  "dead_ends": [
+    { "id": "scpmod:pocket/halls/dead_end_01", "weight": 2 }
+  ],
+
+  "traps": [
+    {"id":  "scpmod:pocket/traps/pitfall_trap_01", "weight":  2 }
+  ]
+}

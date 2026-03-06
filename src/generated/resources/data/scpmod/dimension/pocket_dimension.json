@@ -1,0 +1,25 @@
+{
+  "type": "scpmod:pocket_dim_type",
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "biome": "minecraft:the_void",
+      "features": false,
+      "lakes": false,
+      "layers": [
+        {
+          "block": "minecraft:bedrock",
+          "height": 1
+        },
+        {
+          "block": "minecraft:stone",
+          "height": 5
+        },
+        {
+          "block": "minecraft:air",
+          "height": 1
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "item.scpmod.scp_document":  "SCP Document",
+  "item.scpmod.scp_500":  "SCP-500 - The Panacea",
+  "item.scpmod.scp_427": "SCP-427 - Lovecraftian Locket",
+  "item.scpmod.scp_1025": "SCP-1025 - Encyclopedia of Diseases",
+  "item.scpmod.scp_668": "SCP-668 - \"13\" Chef's Knife",
+  "item.scpmod.scp_207": "SCP-207 - Cola Bottle",
+  "item.scpmod.scp_207_empty": "SCP-207 - Cola Bottle - Empty",
+  "item.scpmod.scp_513": "SCP-513 - The Cowbell",
+  "item.scpmod.scp_109": "SCP-109 - Infinite Canteen",
+  "item.scpmod.scp_458_slice": "Pizza Slice",
+  "item.scpmod.sapphire": "Sapphire",
+  "item.scpmod.raw_sapphire": "Raw Sapphire",
+
+  "block.scpmod.sapphire_ore": "Sapphire Ore",
+  "block.scpmod.sapphire_block": "Block of Sapphire",
+  "block.scpmod.raw_sapphire_block": "Block of Raw Sapphire",
+  "block.scpmod.scp_124": "SCP-124 - Fertile Soil",
+  "block.scpmod.scp_458": "SCP-458 - The Never-Ending Pizza Box",
+
+  "block.scpmod.light_containment_lower": "Light Containment Lower",
+  "block.scpmod.light_containment_middle": "Light Containment Middle",
+  "block.scpmod.light_containment_upper": "Light Containment Upper",
+  "block.scpmod.light_containment_floor": "Light Containment Floor",
+  "block.scpmod.light_containment_ceiling": "Light Containment Ceiling",
+  "block.scpmod.light_containment_light": "Light Containment Light",
+  "block.scpmod.grate": "Grate",
+
+  "block.scpmod.corroded_lower": "Corroded Lower",
+  "block.scpmod.corroded_middle": "Corroded Middle",
+  "block.scpmod.corroded_upper": "Corroded Upper",
+  "block.scpmod.corroded_floor": "Corroded Floor",
+  "block.scpmod.corroded_ceiling": "Corroded Ceiling",
+  "block.scpmod.corroded_light": "Corroded Light",
+  "block.scpmod.corroded_stairs": "Corroded Stairs",
+  "block.scpmod.corroded_slab": "Corroded Slab",
+
+  "item.scpmod.scp_173_spawn_egg": "SCP-173 - The Sculpture - Spawn Egg",
+  "item.scpmod.scp_427_1_spawn_egg": "SCP-427-1 - Flesh Beast - Spawn Egg",
+  "item.scpmod.scp_096_spawn_egg": "SCP-096 - Shy Guy - Spawn Egg",
+  "item.scpmod.scp_513_1_spawn_egg": "SCP-513-1 - Spawn Egg",
+  "item.scpmod.scp_1048_spawn_egg": "SCP-1048 - Builder Bear - Spawn Egg",
+  "item.scpmod.scp_2295_spawn_egg": "SCP-2295 - The Bear With a Heart of Patchwork - Spawn Egg",
+  "item.scpmod.scp_049_spawn_egg": "SCP-049 - The Plague Doctor - Spawn Egg",
+  "item.scpmod.scp_106_spawn_egg": "SCP-106 - The Old Man - Spawn Egg",
+  "item.scpmod.scp_999_spawn_egg": "SCP-999 - The Tickle Monster - Spawn Egg",
+
+  "item.scpmod.pda": "Foundation PDA",
+  "item.scpmod.magnifying_glass": "Magnifying Glass",
+  "item.scpmod.field_scanner": "Field Scanner",
+  "item.scpmod.anomaly_sample": "Anomaly Sample",
+  "block.scpmod.research_table": "Research Table",
+
+  "item.scpmod.builder_npc_spawn_egg": "Builder NPC - Spawn Egg",
+
+  "creativetab.scp_tab": "SCP Mod",
+
+  "entity.scpmod.scp173": "SCP-173",
+  "death.attack.scp_173": "%1$s had their neck snapped by SCP-173.",
+  "death.attack.scp_207": "%1$s couldn't handle the effects of SCP-207.",
+  "death.attack.scp_207.player": "%1$s was pushed beyond human limits by %2$s using SCP-207.",
+
+  "death.attack.scp_513_strangle": "%1$s suffocated mysteriously after ringing SCP-513.",
+  "death.attack.scp_513_strangle.player": "%1$s was slowly strangled to death by %2$s after ringing SCP-513.",
+
+  "entity.scpmod.scp_096": "SCP-096 - Shy Guy",
+  "entity.scpmod.scp_427_1": "SCP-427-1 - Flesh Beast",
+  "entity.scpmod.scp_513_1": "SCP-513-1",
+  "entity.scpmod.scp_049": "SCP-049 - The Plague Doctor",
+  "entity.scpmod.scp_106": "SCP-106 - The Old Man"
+
+}
