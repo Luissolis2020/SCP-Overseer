@@ -52,6 +52,10 @@ public class GhostStructureRenderer {
                 BlockState state = blockInfo.state();
                 if (state.isAir()) continue;
 
+                // Match vanilla structure placement behavior: transform blockstate props
+                // (facing/half/part/etc.) with the active preview mirror+rotation.
+                state = state.mirror(settings.getMirror()).rotate(settings.getRotation());
+
                 BlockPos local = StructureTemplate.calculateRelativePosition(settings, blockInfo.pos());
 
                 poseStack.pushPose();

@@ -2,9 +2,10 @@ package net.luis.scpmod.network;
 
 import net.luis.scpmod.capability.MadnessCapability;
 import net.luis.scpmod.capability.MadnessProvider;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -26,15 +27,18 @@ public class MadnessSyncPacket {
 
     public static void handle(MadnessSyncPacket msg, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            Player player = Minecraft.getInstance().player;
-            if (player != null) {
-                MadnessCapability madness = MadnessProvider.get(player);
-                madness.setMadnessLevel(msg.madnessLevel);
-            }
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientHandler.handle(msg));
         });
         ctx.get().setPacketHandled(true);
     }
 
-
-
+    @OnlyIn(Dist.CLIENT)
+    private static final class ClientHandler {
+        private static void handle(MadnessSyncPacket msg) {
+            var player = net.minecraft.client.Minecraft.getInstance().player;
+            if (player == null) return;
+            MadnessCapability madness = MadnessProvider.get(player);
+            madness.setMadnessLevel(msg.madnessLevel);
+        }
+    }
 }

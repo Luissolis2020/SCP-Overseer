@@ -3,16 +3,18 @@ package net.luis.scpmod.entity.ai.navigation;
 import net.luis.scpmod.entity.custom.BuilderNPC;
 import net.minecraft.server.level.ServerLevel;
 
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Queue;
 
 public class PathJobQueue {
 
     private final BuilderNPC builder;
     private final Queue<PathJob> jobs = new LinkedList<>();
+    private final Map<String, Integer> failureRetries = new HashMap<>();
     private PathJob currentJob;
     private int retryCooldown = 0;
-    private static final int RETRY_TICKS = 20;
 
     public PathJobQueue(BuilderNPC builder) {
         this.builder = builder;
@@ -32,6 +34,7 @@ public class PathJobQueue {
                 if (currentJob.shouldAbort(level)) {
                     System.out.println("[PathJobQueue] Job aborted before start: " + currentJob.getName());
                     currentJob.onAbort(level);
+                    clearFailureState(currentJob);
                     currentJob = null;
                     return;
                 }
@@ -46,6 +49,7 @@ public class PathJobQueue {
         if (job.shouldAbort(level)) {
             System.out.println("[PathJobQueue] Job aborted: " + job.getName());
             job.onAbort(level);
+            clearFailureState(job);
             currentJob = null;
             retryCooldown = 0;
             return;
@@ -53,50 +57,58 @@ public class PathJobQueue {
 
         job.tick(level);
 
-        if (currentJob == job && job.isComplete()) {
+        // Job may clear/cancel itself indirectly (e.g., site finalized clears builder queue).
+        // In that case, don't treat it as a retryable failure here.
+        if (currentJob != job) {
+            retryCooldown = 0;
+            return;
+        }
+
+        if (job.isComplete()) {
             System.out.println("[PathJobQueue] Job completed: " + job.getName());
+            clearFailureState(job);
             currentJob = null;
             retryCooldown = 0;
             return;
         }
 
-        if (currentJob == job && job.shouldAbort(level)) {
+        if (job.shouldAbort(level)) {
             System.out.println("[PathJobQueue] Job aborted after tick: " + job.getName());
             job.onAbort(level);
+            clearFailureState(job);
             currentJob = null;
             retryCooldown = 0;
             return;
         }
 
         if (job.hasFailed()) {
-            retryCooldown = RETRY_TICKS;
-            job.resetForRetry();
-            jobs.add(job);
-            System.out.println("[PathJobQueue] Job failed, retrying in " + RETRY_TICKS + " ticks.");
+            String key = keyFor(job);
+            int attempts = failureRetries.getOrDefault(key, 0) + 1;
+            failureRetries.put(key, attempts);
+            int maxRetries = Math.max(0, job.getMaxFailureRetries());
+            int retryDelay = Math.max(0, job.getRetryDelayTicks());
+
+            if (attempts < maxRetries) {
+                retryCooldown = retryDelay;
+                job.resetForRetry();
+                jobs.add(job);
+                System.out.println("[PathJobQueue] Job failed (" + attempts + "/" + maxRetries
+                        + "), retrying in " + retryDelay + " ticks: " + job.getName());
+            } else {
+                System.out.println("[PathJobQueue] Job failed permanently after " + attempts
+                        + " attempts: " + job.getName());
+                job.onAbort(level);
+                clearFailureState(job);
+                retryCooldown = 0;
+            }
             currentJob = null;
         }
 
     }
 
     public void enqueue(PathJob job) {
-        String name = job.getName();
-
-        if (name.equals("MoveToConstructionSite")) {
-            if (currentJob != null && currentJob.getName().equals("MoveToConstructionSite")) return;
-
-            PathJob last = null;
-            for (PathJob j : jobs) last = j;
-            if (last != null && last.getName().equals("MoveToConstructionSite")) return;
-        }
-
-        if (name.startsWith("MoveToPos")) {
-            if (currentJob != null && currentJob.getName().startsWith("MoveToPos")) return;
-
-            PathJob last = null;
-            for (PathJob j : jobs) last = j;
-            if (last != null && last.getName().startsWith("MoveToPos")) return;
-        }
-
+        if (job == null) return;
+        if (job.shouldDeduplicate() && isDuplicate(job)) return;
         jobs.add(job);
     }
 
@@ -107,6 +119,8 @@ public class PathJobQueue {
     public void clear() {
         cancelCurrentJob();
         jobs.clear();
+        failureRetries.clear();
+        retryCooldown = 0;
     }
 
     public PathJob getCurrentJob() {
@@ -115,9 +129,31 @@ public class PathJobQueue {
 
     public void cancelCurrentJob() {
         if (currentJob != null) {
+            clearFailureState(currentJob);
             currentJob.cancel();
             currentJob = null;
         }
+        builder.getNavigation().stop();
+    }
+
+    private boolean isDuplicate(PathJob job) {
+        String key = keyFor(job);
+        if (currentJob != null && key.equals(keyFor(currentJob))) return true;
+
+        for (PathJob queued : jobs) {
+            if (key.equals(keyFor(queued))) return true;
+        }
+        return false;
+    }
+
+    private void clearFailureState(PathJob job) {
+        failureRetries.remove(keyFor(job));
+    }
+
+    private String keyFor(PathJob job) {
+        String key = job.getRetryKey();
+        if (key == null || key.isBlank()) return job.getName();
+        return key;
     }
 
 }

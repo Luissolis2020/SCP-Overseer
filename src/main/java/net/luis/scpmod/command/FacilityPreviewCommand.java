@@ -1,7 +1,6 @@
 package net.luis.scpmod.command;
 
 import com.mojang.brigadier.CommandDispatcher;
-import net.luis.scpmod.client.ClientPreviewState;
 import net.luis.scpmod.facility.FacilityOverlapChecker;
 import net.luis.scpmod.network.ActivateFacilityPreviewPacket;
 import net.luis.scpmod.network.SCPModNetwork;
@@ -14,7 +13,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
-import net.minecraft.client.Minecraft;
 
 public class FacilityPreviewCommand {
 

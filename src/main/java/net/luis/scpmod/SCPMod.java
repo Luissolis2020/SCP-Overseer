@@ -4,7 +4,6 @@ import com.mojang.logging.LogUtils;
 import net.luis.scpmod.block.ModBlocks;
 import net.luis.scpmod.block.client.SCP_458Renderer;
 import net.luis.scpmod.block.entity.ModBlockEntities;
-import net.luis.scpmod.client.MadnessOverlay;
 import net.luis.scpmod.entity.ModEntities;
 import net.luis.scpmod.entity.client.*;
 import net.luis.scpmod.facility.building.FacilityBlueprintLoader;
@@ -50,7 +49,6 @@ public class SCPMod {
 
         GeckoLib.initialize();
 
-        MinecraftForge.EVENT_BUS.addListener(MadnessOverlay::renderMadnessOverlay);
         MinecraftForge.EVENT_BUS.register(this);
         modEventBus.addListener(this::addCreative);
 
@@ -68,6 +66,7 @@ public class SCPMod {
 
     private void commonSetup(final FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
+            SCPModNetwork.registerPackets();
             ModItems.registerResearchableItems();
             ModBlocks.registerResearchableBlocks();
         });
@@ -103,7 +102,6 @@ public class SCPMod {
 
             BlockEntityRenderers.register(ModBlockEntities.SCP_458_Entity.get(), SCP_458Renderer::new);
             //ItemBlockRenderTypes.setRenderLayer(ModBlocks.SCP_458.get(), RenderType.cutout());
-            SCPModNetwork.registerPackets();
         }
     }
 }

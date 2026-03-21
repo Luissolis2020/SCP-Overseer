@@ -7,13 +7,15 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 import javax.annotation.Nullable;
+import java.util.Queue;
 
 public class PathJobPlaceBlock extends PathJob {
 
@@ -24,7 +26,6 @@ public class PathJobPlaceBlock extends PathJob {
     private boolean navigating = false;
     private int placeTicks = 0;
     private int stuckTicks = 0;
-    private static final int PLACEMENT_TIME = 2;
 
     private static final double ARRIVE_DIST_SQR = 2.25;   // within 1.5 blocks
     private static final double TOO_FAR_SQR    = 64.0;   // hard ceiling
@@ -73,7 +74,6 @@ public class PathJobPlaceBlock extends PathJob {
 
         if (existing.equals(desired)) {
             markDone(task.worldPos(), desired);
-            FacilityManager.get(level).saveConstructionSite(site);
             this.completed = true;
             return;
         }
@@ -83,8 +83,7 @@ public class PathJobPlaceBlock extends PathJob {
         int relY = task.worldPos().getY() - site.getOrigin().getY();
         if (standPos == null) {
             if (relY <= 1) {
-                builder.markBadTask(level, task.worldPos());
-                this.failed = true;
+                deferAndAbort(level, "no-stand-pos");
                 return;
             }
             tryPlanScaffold(level);
@@ -94,9 +93,8 @@ public class PathJobPlaceBlock extends PathJob {
 
         double distToStand = builder.blockPosition().distSqr(standPos);
         if (distToStand > ARRIVE_DIST_SQR) {
-            boolean navStarted = builder.getNavigation().moveTo(
-                    standPos.getX() + 0.5, standPos.getY(), standPos.getZ() + 0.5, 1.0
-            );
+            var path = builder.getNavigation().createPath(standPos, 0);
+            boolean navStarted = path != null && path.canReach() && builder.getNavigation().moveTo(path, builder.getNavigationSpeed());
             if (!navStarted) {
                 System.out.println("[PathJobPlaceBlock] Failed to start path to " + standPos + " for " + task.worldPos());
 
@@ -110,13 +108,8 @@ public class PathJobPlaceBlock extends PathJob {
                 }
 
                 // No stand worked => mark task temporarily bad so selector doesn't immediately re-pick it
-                builder.markBadTask(level, task.worldPos());
-
                 tryPlanScaffold(level);
-
-                this.failed = true;
-                this.completed = false;
-                builder.clearHeldItem();
+                deferAndAbort(level, "nav-start-failed");
                 return;
             }
             navigating = true;
@@ -129,6 +122,11 @@ public class PathJobPlaceBlock extends PathJob {
     @Override
     protected  void onTick(ServerLevel level) {
         if (this.failed || this.completed) return;
+        if (builder.getAssignedSite() != site) {
+            this.failed = true;
+            builder.clearHeldItem();
+            return;
+        }
 
         BlockPos pos = task.worldPos();
         BlockState existing = level.getBlockState(pos);
@@ -136,7 +134,6 @@ public class PathJobPlaceBlock extends PathJob {
 
         if (existing.equals(desired)) {
             markDone(pos, desired);
-            FacilityManager.get((ServerLevel) level).saveConstructionSite(site);
             builder.clearHeldItem();
             this.completed = true;
             return;
@@ -179,11 +176,21 @@ public class PathJobPlaceBlock extends PathJob {
             }
         }
 
+        if (isOccupyingPlacementCell(pos)) {
+            if (trySwitchStandAndRepath((ServerLevel) level, pos)) {
+                return;
+            }
+
+            tryPlanScaffold((ServerLevel) level);
+            deferAndAbort((ServerLevel) level, "occupied-target-cell");
+            if (standPos != null) builder.markBadStandForTarget(task.worldPos(), standPos);
+            return;
+        }
+
         // Same block, wrong props: overwrite
         if (!existing.isAir() && existing.is(desired.getBlock()) && !existing.equals(desired)) {
             level.setBlockAndUpdate(pos, desired);
             markDone(pos, desired);
-            FacilityManager.get((ServerLevel) level).saveConstructionSite(site);
             builder.clearHeldItem();
             this.completed = true;
             return;
@@ -218,9 +225,11 @@ public class PathJobPlaceBlock extends PathJob {
         placeTicks++;
         builder.swing(builder.getUsedItemHand(), true);
 
-        if (placeTicks >= PLACEMENT_TIME) {
+        if (placeTicks >= builder.getPlaceTicksPerBlock()) {
             if (desired.getBlock() instanceof DoorBlock) {
                 placeDoorConstructionOpen((ServerLevel) level, pos, desired);
+            } else if (desired.getBlock() instanceof BedBlock) {
+                placeBedAsPair((ServerLevel) level, pos, desired);
             } else {
                 level.setBlockAndUpdate(pos, desired);
                 markDone(pos, desired);
@@ -229,7 +238,6 @@ public class PathJobPlaceBlock extends PathJob {
             boolean isScaffold = desired.is(Blocks.SCAFFOLDING);
 
             FacilityManager mgr = FacilityManager.get((ServerLevel) level);
-            mgr.saveConstructionSite(site);
             builder.clearHeldItem();
             this.completed = true;
 
@@ -240,6 +248,7 @@ public class PathJobPlaceBlock extends PathJob {
     private void markDone(BlockPos pos, BlockState desired) {
         if (desired.is(Blocks.SCAFFOLDING)) site.markScaffoldPlaced(pos);
         else site.markPlacementComplete(pos);
+        builder.clearBadStandsForTarget(pos);
     }
 
     private void deferAndAbort(ServerLevel level, String reason) {
@@ -248,7 +257,6 @@ public class PathJobPlaceBlock extends PathJob {
         site.markPlacementFailed(level, task.worldPos());
 
         site.deferPlacementTask(task);
-        FacilityManager.get(level).saveConstructionSite(site);
 
         abortBecauseDeferred = true;
 
@@ -282,11 +290,40 @@ public class PathJobPlaceBlock extends PathJob {
         site.markPlacementComplete(topPos);
     }
 
+    private void placeBedAsPair(ServerLevel level, BlockPos pos, BlockState anyPart) {
+        if (!(anyPart.getBlock() instanceof BedBlock)) return;
+
+        Direction facing = anyPart.hasProperty(BedBlock.FACING)
+                ? anyPart.getValue(BedBlock.FACING)
+                : Direction.NORTH;
+        BedPart part = anyPart.hasProperty(BedBlock.PART)
+                ? anyPart.getValue(BedBlock.PART)
+                : BedPart.FOOT;
+        boolean occupied = anyPart.hasProperty(BedBlock.OCCUPIED) && anyPart.getValue(BedBlock.OCCUPIED);
+
+        BlockPos footPos = (part == BedPart.FOOT) ? pos : pos.relative(facing.getOpposite());
+        BlockPos headPos = (part == BedPart.HEAD) ? pos : pos.relative(facing);
+
+        BlockState foot = anyPart.setValue(BedBlock.PART, BedPart.FOOT).setValue(BedBlock.FACING, facing);
+        BlockState head = anyPart.setValue(BedBlock.PART, BedPart.HEAD).setValue(BedBlock.FACING, facing);
+        if (foot.hasProperty(BedBlock.OCCUPIED)) foot = foot.setValue(BedBlock.OCCUPIED, occupied);
+        if (head.hasProperty(BedBlock.OCCUPIED)) head = head.setValue(BedBlock.OCCUPIED, occupied);
+
+        level.setBlockAndUpdate(footPos, foot);
+        level.setBlockAndUpdate(headPos, head);
+
+        site.markPlacementComplete(footPos);
+        site.markPlacementComplete(headPos);
+        builder.clearBadStandsForTarget(footPos);
+        builder.clearBadStandsForTarget(headPos);
+    }
+
 
     @Override
     public boolean shouldAbort(ServerLevel level) {
         if (site == null || task == null) return true;
         if (!builder.hasSite()) return true;
+        if (builder.getAssignedSite() != site) return true;
 
         if (abortBecauseScaffoldPlanned || abortBecauseDeferred) {
             return true;
@@ -298,7 +335,6 @@ public class PathJobPlaceBlock extends PathJob {
 
         if (existing.equals(desired)) {
             markDone(pos, desired);
-            FacilityManager.get(level).saveConstructionSite(site);
             builder.clearHeldItem();
             return true;
         }
@@ -312,7 +348,6 @@ public class PathJobPlaceBlock extends PathJob {
                 builder.markBadTask(level, pos);
 
                 site.deferPlacementTask(task);
-                FacilityManager.get(level).saveConstructionSite(site);
                 builder.clearHeldItem();
                 return true;
             }
@@ -324,6 +359,25 @@ public class PathJobPlaceBlock extends PathJob {
     private void tryPlanScaffold(ServerLevel level) {
         if (task == null) return;
         if (task.state().is(Blocks.SCAFFOLDING)) return;
+        int relY = task.worldPos().getY() - site.getOrigin().getY();
+        if (relY <= 1) return;
+
+        // Require at least one prior failure before expanding support columns.
+        int failCount = site.getPlacementFailCount(task.worldPos());
+        if (failCount < 1) return;
+
+        int buildPending = site.getBuildLayerQueues().stream().mapToInt(Queue::size).sum();
+        int deferredPending = site.getDeferredLayerQueues().stream().mapToInt(Queue::size).sum();
+        int scaffoldPending = site.getScaffoldLayerQueues().stream().mapToInt(Queue::size).sum();
+        int placedScaffolds = site.getPlacedScaffolds().size();
+        int nonScaffoldPending = buildPending + deferredPending;
+
+        // Keep scaffold growth bounded so late-stage retries don't spam support blocks.
+        int scaffoldBudget = Math.max(4, Math.min(10, (nonScaffoldPending / 24) + 4));
+        if ((scaffoldPending + placedScaffolds) >= scaffoldBudget) return;
+
+        // If supports are already queued, let builder consume them before planning more.
+        if (scaffoldPending > 0 && failCount < 3) return;
 
         boolean planned = site.planScaffoldFor(level, task.worldPos());
         if (planned) {
@@ -338,15 +392,18 @@ public class PathJobPlaceBlock extends PathJob {
         for (BlockPos stand : builder.findStandCandidatesForPlacement(level, target)) {
             if (builder.isStandBlacklisted(level, stand)) continue;
             if (!builder.isStandable(level, stand)) continue;
-
-            if (builder.getNavigation().createPath(stand, 0) == null) {
+            if (!builder.canReachStandNow(level, stand)) {
                 builder.markBadStand(level, stand);
                 continue;
             }
 
-            boolean navStarted = builder.getNavigation().moveTo(
-                    stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5, 1.0
-            );
+            var path = builder.getNavigation().createPath(stand, 0);
+            if (path == null || !path.canReach()) {
+                builder.markBadStand(level, stand);
+                continue;
+            }
+
+            boolean navStarted = builder.getNavigation().moveTo(path, builder.getNavigationSpeed());
 
             if (navStarted) {
                 standPos = stand.immutable();
@@ -358,6 +415,12 @@ public class PathJobPlaceBlock extends PathJob {
             }
         }
         return false;
+    }
+
+    private boolean isOccupyingPlacementCell(BlockPos targetPos) {
+        BlockPos feet = builder.blockPosition();
+        BlockPos head = feet.above();
+        return feet.equals(targetPos) || head.equals(targetPos);
     }
 
     @Override

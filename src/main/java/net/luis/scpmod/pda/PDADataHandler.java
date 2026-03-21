@@ -1,6 +1,7 @@
 package net.luis.scpmod.pda;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 
@@ -12,6 +13,7 @@ import java.util.Set;
 public class PDADataHandler {
     private static final String NBT_KEY = "scpmod_unlocked_tabs";
     private static final String NBT_ANOMALIES = "scpmod_discovered_anomalies";
+    private static final String NBT_PDA = "scpmod_pda";
 
     private static final String KEY_SCP_SORT_MODE = "scp_sort_mode";
     private static final String NBT_MISSION = "scpmod_mission";
@@ -23,8 +25,41 @@ public class PDADataHandler {
     private static final String NBT_RESEARCH_POINTS = "scpmod_research_points";
     private static final String NBT_RESEARCH_UNLOCKS = "scpmod_research_unlocks";
 
+    private static CompoundTag getPersistedRoot(Player player) {
+        CompoundTag root = player.getPersistentData();
+        CompoundTag persisted = root.getCompound(Player.PERSISTED_NBT_TAG);
+
+        migrateLegacyData(root, persisted);
+        root.put(Player.PERSISTED_NBT_TAG, persisted);
+
+        return persisted;
+    }
+
+    private static void migrateLegacyData(CompoundTag root, CompoundTag persisted) {
+        moveCompoundKey(root, persisted, NBT_KEY);
+        moveCompoundKey(root, persisted, NBT_ANOMALIES);
+        moveCompoundKey(root, persisted, NBT_PDA);
+        moveCompoundKey(root, persisted, NBT_MISSION);
+        moveCompoundKey(root, persisted, NBT_BLOCK_SCANS);
+        moveCompoundKey(root, persisted, NBT_UNIQUE_BLOCK_SCANS);
+        moveCompoundKey(root, persisted, NBT_CLEARED_ZONES);
+        moveCompoundKey(root, persisted, NBT_RESEARCH_UNLOCKS);
+
+        if (!persisted.contains(NBT_RESEARCH_POINTS) && root.contains(NBT_RESEARCH_POINTS, Tag.TAG_INT)) {
+            persisted.putInt(NBT_RESEARCH_POINTS, root.getInt(NBT_RESEARCH_POINTS));
+            root.remove(NBT_RESEARCH_POINTS);
+        }
+    }
+
+    private static void moveCompoundKey(CompoundTag root, CompoundTag persisted, String key) {
+        if (!persisted.contains(key) && root.contains(key, Tag.TAG_COMPOUND)) {
+            persisted.put(key, root.getCompound(key).copy());
+            root.remove(key);
+        }
+    }
+
     public static void unlockTab(Player player, String tabId) {
-        CompoundTag persistentData = player.getPersistentData();
+        CompoundTag persistentData = getPersistedRoot(player);
         CompoundTag tabData = persistentData.getCompound(NBT_KEY);
 
         tabData.putBoolean(tabId, true);
@@ -32,13 +67,13 @@ public class PDADataHandler {
     }
 
     public static boolean isTabUnlocked(Player player, String tabId) {
-        CompoundTag persistentData = player.getPersistentData();
+        CompoundTag persistentData = getPersistedRoot(player);
         CompoundTag tabData = persistentData.getCompound(NBT_KEY);
         return tabData.getBoolean(tabId);
     }
 
     public static Set<String> getAllUnlockedTabs(Player player) {
-        CompoundTag persistentData = player.getPersistentData();
+        CompoundTag persistentData = getPersistedRoot(player);
         CompoundTag tabData = persistentData.getCompound(NBT_KEY);
 
         Set<String> unlocked = new HashSet<>();
@@ -59,7 +94,7 @@ public class PDADataHandler {
     }
 
     public static Set<String> getDiscoveredAnomalies(Player player) {
-        CompoundTag data = player.getPersistentData().getCompound(NBT_ANOMALIES);
+        CompoundTag data = getPersistedRoot(player).getCompound(NBT_ANOMALIES);
         Set<String> ids = new HashSet<>();
         for (String key : data.getAllKeys()) {
             if (data.getBoolean(key)) ids.add(key);
@@ -68,24 +103,24 @@ public class PDADataHandler {
     }
 
     public static void markAnomalyDiscovered(Player player, String id) {
-        CompoundTag persistent = player.getPersistentData();
+        CompoundTag persistent = getPersistedRoot(player);
         CompoundTag data = persistent.getCompound(NBT_ANOMALIES);
         data.putBoolean(id, true);
         persistent.put(NBT_ANOMALIES, data);
     }
 
     private static CompoundTag getOrCreatePdaTag(Player player) {
-        CompoundTag data = player.getPersistentData();
-        if (!data.contains("scpmod_pda")) {
+        CompoundTag data = getPersistedRoot(player);
+        if (!data.contains(NBT_PDA)) {
             CompoundTag tag = new CompoundTag();
-            data.put("scpmod_pda", tag);
+            data.put(NBT_PDA, tag);
             return tag;
         }
-        return data.getCompound("scpmod_pda");
+        return data.getCompound(NBT_PDA);
     }
 
     public static CompoundTag getPdaTag(Player player) {
-        return player.getPersistentData().getCompound("scpmod_pda");
+        return getPersistedRoot(player).getCompound(NBT_PDA);
     }
 
 
@@ -100,7 +135,7 @@ public class PDADataHandler {
     }
 
     public static Mission loadMission(Player p) {
-        CompoundTag tag = p.getPersistentData().getCompound(NBT_MISSION);
+        CompoundTag tag = getPersistedRoot(p).getCompound(NBT_MISSION);
         if (tag.isEmpty()) {
             return new Mission("find_anomalies",
                     Component.literal("Facility Authorization Pending"),
@@ -125,18 +160,18 @@ public class PDADataHandler {
         tag.putString("objective", m.getObjective().getString());
         tag.putInt("cur", m.getCurrentProgress());
         tag.putInt("req", m.getRequiredProgress());
-        p.getPersistentData().put(NBT_MISSION, tag);
+        getPersistedRoot(p).put(NBT_MISSION, tag);
     }
 
     public static void markBlockScanned(Player player, String blockId) {
-        CompoundTag persistent = player.getPersistentData();
+        CompoundTag persistent = getPersistedRoot(player);
         CompoundTag scans = persistent.getCompound(NBT_BLOCK_SCANS);
         scans.putBoolean(blockId, true);
         persistent.put(NBT_BLOCK_SCANS, scans);
     }
 
     public static Set<String> getScannedBlocks(Player player) {
-        CompoundTag scans = player.getPersistentData().getCompound(NBT_BLOCK_SCANS);
+        CompoundTag scans = getPersistedRoot(player).getCompound(NBT_BLOCK_SCANS);
         Set<String> out = new HashSet<>();
         for (String key : scans.getAllKeys()) {
             if (scans.getBoolean(key)) out.add(key);
@@ -151,12 +186,12 @@ public class PDADataHandler {
     }
 
     public static boolean hasScannedBlock(Player player, String blockId) {
-        CompoundTag scans = player.getPersistentData().getCompound(NBT_UNIQUE_BLOCK_SCANS);
+        CompoundTag scans = getPersistedRoot(player).getCompound(NBT_UNIQUE_BLOCK_SCANS);
         return scans.getBoolean(blockId);
     }
 
     public static boolean markBlockScannedUnique(Player player, String blockId) {
-        CompoundTag persistent = player.getPersistentData();
+        CompoundTag persistent = getPersistedRoot(player);
         CompoundTag scans = persistent.getCompound(NBT_UNIQUE_BLOCK_SCANS);
 
         if (scans.getBoolean(blockId)) return false; // already known
@@ -166,7 +201,7 @@ public class PDADataHandler {
     }
 
     public static List<String> getUniqueScannedBlocksList(Player player) {
-        CompoundTag scans = player.getPersistentData().getCompound(NBT_UNIQUE_BLOCK_SCANS);
+        CompoundTag scans = getPersistedRoot(player).getCompound(NBT_UNIQUE_BLOCK_SCANS);
         List<String> out = new ArrayList<>();
         for (String k : scans.getAllKeys()) if (scans.getBoolean(k)) out.add(k);
         out.sort(String::compareTo);
@@ -174,23 +209,23 @@ public class PDADataHandler {
     }
 
     public static boolean isZoneCleared(Player player, int zoneId) {
-        CompoundTag tag = player.getPersistentData().getCompound(NBT_CLEARED_ZONES);
+        CompoundTag tag = getPersistedRoot(player).getCompound(NBT_CLEARED_ZONES);
         return tag.getBoolean(String.valueOf(zoneId));
     }
 
     public static void clearZone(Player player, int zoneId) {
-        CompoundTag data = player.getPersistentData();
+        CompoundTag data = getPersistedRoot(player);
         CompoundTag tag = data.getCompound(NBT_CLEARED_ZONES);
         tag.putBoolean(String.valueOf(zoneId), true);
         data.put(NBT_CLEARED_ZONES, tag);
     }
 
     public static int getResearchPoints(Player player) {
-        return player.getPersistentData().getInt(NBT_RESEARCH_POINTS);
+        return getPersistedRoot(player).getInt(NBT_RESEARCH_POINTS);
     }
 
     public static void setResearchPoints(Player player, int value) {
-        player.getPersistentData().putInt(NBT_RESEARCH_POINTS, Math.max(0, value));
+        getPersistedRoot(player).putInt(NBT_RESEARCH_POINTS, Math.max(0, value));
     }
 
     public static void addResearchPoints(Player player, int amount) {
@@ -200,12 +235,12 @@ public class PDADataHandler {
     }
 
     public static boolean isResearchUnlockBought(Player player, String id) {
-        CompoundTag tag = player.getPersistentData().getCompound(NBT_RESEARCH_UNLOCKS);
+        CompoundTag tag = getPersistedRoot(player).getCompound(NBT_RESEARCH_UNLOCKS);
         return tag.getBoolean(id);
     }
 
     public static void setResearchUnlockBought(Player player, String id, boolean value) {
-        CompoundTag data = player.getPersistentData();
+        CompoundTag data = getPersistedRoot(player);
         CompoundTag tag = data.getCompound(NBT_RESEARCH_UNLOCKS);
         tag.putBoolean(id, value);
         data.put(NBT_RESEARCH_UNLOCKS, tag);
@@ -219,7 +254,7 @@ public class PDADataHandler {
     }
 
     public static Set<String> getBoughtResearchUnlocks(Player player) {
-        CompoundTag tag = player.getPersistentData().getCompound(NBT_RESEARCH_UNLOCKS);
+        CompoundTag tag = getPersistedRoot(player).getCompound(NBT_RESEARCH_UNLOCKS);
         Set<String> out = new HashSet<>();
         for (String k : tag.getAllKeys()) {
             if (tag.getBoolean(k)) out.add(k);

@@ -1,12 +1,14 @@
 package net.luis.scpmod.entity.ai.navigation;
 
 import net.luis.scpmod.entity.custom.BuilderNPC;
+import net.luis.scpmod.facility.construction.ConstructionSite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
 public class PathJobMoveToPos extends PathJob {
     private final BuilderNPC builder;
+    private final ConstructionSite site;
     private final BlockPos target;
 
     private int ticksSinceProgress = 0;
@@ -20,9 +22,10 @@ public class PathJobMoveToPos extends PathJob {
 
     private int replans = 0;
 
-    public PathJobMoveToPos(BuilderNPC builder, BlockPos target) {
+    public PathJobMoveToPos(BuilderNPC builder, ConstructionSite site, BlockPos target) {
         super(builder);
         this.builder = builder;
+        this.site = site;
         this.target = target.immutable();
     }
 
@@ -77,8 +80,9 @@ public class PathJobMoveToPos extends PathJob {
     }
 
     private boolean tryStartMove() {
-        Vec3 center = Vec3.atCenterOf(target);
-        return builder.getNavigation().moveTo(center.x, center.y, center.z, 1.0);
+        var path = builder.getNavigation().createPath(target, 0);
+        if (path == null || !path.canReach()) return false;
+        return builder.getNavigation().moveTo(path, builder.getNavigationSpeed());
     }
 
     private boolean isAtTarget() {
@@ -102,7 +106,7 @@ public class PathJobMoveToPos extends PathJob {
 
     @Override
     public boolean shouldAbort(ServerLevel level) {
-        return !builder.hasSite();
+        return !builder.hasSite() || builder.getAssignedSite() != site;
     }
 
     @Override

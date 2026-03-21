@@ -34,12 +34,19 @@ public class FacilityManager {
     private final Set<String> loggedMismatches = new HashSet<>();
     private final Map<BlockPos, Integer> lastProgressSent = new HashMap<>();
     private final Map<BlockPos, Long> lastProgressSyncTick = new HashMap<>();
+    private final Map<BlockPos, Long> lastSiteMaintenanceTick = new HashMap<>();
+    private static final int SITE_MAINTENANCE_INTERVAL_TICKS = 20; // 1s
+    private static final int PROGRESS_SYNC_INTERVAL_TICKS = 20;    // 1s
 
     // Singleton storage per level
     private static final Map<ResourceKey<Level>, FacilityManager> INSTANCES = new HashMap<>();
 
     public static FacilityManager get(ServerLevel level) {
         return INSTANCES.computeIfAbsent(level.dimension(), dim -> new FacilityManager(level));
+    }
+
+    public static void clearAll() {
+        INSTANCES.clear();
     }
 
     public static void debugLogInstances() {
@@ -246,31 +253,23 @@ public class FacilityManager {
     }
 
     public void tick(ServerLevel level) {
+        long now = level.getServer().getTickCount();
         Iterator<ConstructionSite> it = activeSites.iterator();
         while (it.hasNext()) {
             ConstructionSite site = it.next();
 
-            site.pruneInvalidDigTargets(level);
-            site.pruneInvalidPlacementTargets(level);
-            site.promoteDeferredTasksIfReachable(level);
+            if (shouldRunSiteMaintenance(site, now)) {
+                site.pruneInvalidDigTargets(level);
+                site.pruneInvalidPlacementTargets(level);
+                site.promoteDeferredTasksIfReachable(level);
+            }
 
             // --- Finalize when no work remains ---
             if (!site.hasPendingWork() && site.getState() != ConstructionState.BUILT) {
                 System.out.println("[FacilityManager] >> Finalizing site at " + site.getOrigin()
                         + " | active=" + activeSites.contains(site)
                         + ", builder=" + site.hasBuilder());
-                site.setState(ConstructionState.BUILT);
-
-                FacilityRoomInstance room = findRoomBySite(site);
-                if (room != null && !room.isBuilt()) {
-                    room.markBuiltAndActive();
-                    onRoomBuilt(level, room);
-                }
-
-                if (site.hasBuilder()) {
-                    site.getBuilder().clearAssignedSite();
-                }
-
+                finalizeSite(level, site, null, false);
                 it.remove();
                 continue;
             }
@@ -315,6 +314,13 @@ public class FacilityManager {
                 onSiteProgressMaybeSync(level, site);
             }
         }
+    }
+
+    private boolean shouldRunSiteMaintenance(ConstructionSite site, long nowTick) {
+        long last = lastSiteMaintenanceTick.getOrDefault(site.getOrigin(), Long.MIN_VALUE);
+        if ((nowTick - last) < SITE_MAINTENANCE_INTERVAL_TICKS) return false;
+        lastSiteMaintenanceTick.put(site.getOrigin(), nowTick);
+        return true;
     }
 
     private BuilderNPC findNearestBuilder(ServerLevel level, BlockPos pos) {
@@ -402,44 +408,55 @@ public class FacilityManager {
         boolean done = !site.hasBlocksToDig() && !site.hasBlocksToPlace();
         if (!done) return;
 
-        // Mark site
+        finalizeSite(level, site, source, true);
+    }
+
+    private void finalizeSite(ServerLevel level, ConstructionSite site, @Nullable BuilderNPC source, boolean removeFromActive) {
         site.setState(ConstructionState.BUILT);
 
-        // Link room + announce
         FacilityRoomInstance room = getRooms().stream()
                 .filter(r -> r.getOrigin().equals(site.getOrigin()))
                 .findFirst().orElse(null);
-
         if (room != null && !room.isBuilt()) {
             room.setBuilt(true);
             room.setActive(true);
+            room.state = ConstructionState.BUILT;
             onRoomBuilt(level, room);
         }
 
-        // remove temporary scaffolding
+        int removedScaffolds = 0;
         for (BlockPos p : site.getPlacedScaffolds()) {
             BlockState s = level.getBlockState(p);
             if (s.is(Blocks.SCAFFOLDING)) {
                 level.destroyBlock(p, false);
+                removedScaffolds++;
             }
         }
         site.getPlacedScaffolds().clear();
-        closeDoors(level, site);
 
-        // Persist and clean up
-        saveConstructionSite(site);
+        int closedDoors = closeDoors(level, site);
+
+        // Completed site should not be reloaded as active construction.
+        saveData.getSites().remove(site.getOrigin());
         saveData.setDirty();
 
-        // Remove from active cache
-        getActiveSites().remove(site);
-
-        // If coming from a builder, clear it so Manager.tick logic is consistent
-        if (source != null) {
-            source.clearAssignedSite();
-            source.setCurrentPhase(BuilderNPC.BuildPhase.IDLE);
+        if (removeFromActive) {
+            getActiveSites().remove(site);
         }
 
-        System.out.println("[FacilityManager] Finalized site at " + site.getOrigin());
+        lastSiteMaintenanceTick.remove(site.getOrigin());
+        lastProgressSent.remove(site.getOrigin());
+        lastProgressSyncTick.remove(site.getOrigin());
+
+        BuilderNPC assigned = source != null ? source : site.getBuilder();
+        if (assigned != null) {
+            assigned.clearAssignedSite();
+            assigned.setCurrentPhase(BuilderNPC.BuildPhase.IDLE);
+        }
+        site.setBuilder(null);
+
+        System.out.println("[FacilityManager] Finalized site at " + site.getOrigin()
+                + " (scaffoldsRemoved=" + removedScaffolds + ", doorsClosed=" + closedDoors + ")");
     }
 
     public void onSiteProgressMaybeSync(ServerLevel level, ConstructionSite site) {
@@ -455,12 +472,15 @@ public class FacilityManager {
             percent = Math.min(percent, 99);
         }
 
-        // throttle: at most once every 10 ticks per site, and only if % changed
+        // Only sync when the displayed progress changes, and no more than once per interval.
         long now = level.getServer().getTickCount();
         long lastTick = lastProgressSyncTick.getOrDefault(site.getOrigin(), 0L);
         Integer lastPct = lastProgressSent.get(site.getOrigin());
 
-        if (lastPct != null && lastPct == percent && (now - lastTick) < 10) {
+        if (lastPct != null && lastPct == percent) {
+            return;
+        }
+        if ((now - lastTick) < PROGRESS_SYNC_INTERVAL_TICKS) {
             return;
         }
 
@@ -568,22 +588,30 @@ public class FacilityManager {
         System.out.println("[FacilityManager] Rebuilt overlap registry for " + level.dimension().location());
     }
 
-    private void closeDoors(ServerLevel level, ConstructionSite site) {
-        BlockPos o = site.getOrigin();
-        for (int y = 0; y < site.getHeight(); y++) {
-            for (int z = 0; z < site.getDepth(); z++) {
-                for (int x = 0; x < site.getWidth(); x++) {
-                    BlockPos p = o.offset(x, y, z);
-                    BlockState s = level.getBlockState(p);
+    private int closeDoors(ServerLevel level, ConstructionSite site) {
+        int closed = 0;
+        for (Map.Entry<BlockPos, BlockState> entry : site.getExpectedBlockStates().entrySet()) {
+            if (!(entry.getValue().getBlock() instanceof DoorBlock)) continue;
 
-                    if (s.getBlock() instanceof DoorBlock) {
-                        if (s.hasProperty(DoorBlock.OPEN)) s = s.setValue(DoorBlock.OPEN, false);
-                        if (s.hasProperty(DoorBlock.POWERED)) s = s.setValue(DoorBlock.POWERED, false);
-                        level.setBlock(p, s, 3);
-                    }
-                }
+            BlockPos p = entry.getKey();
+            BlockState s = level.getBlockState(p);
+            if (!(s.getBlock() instanceof DoorBlock)) continue;
+
+            boolean changed = false;
+            if (s.hasProperty(DoorBlock.OPEN) && s.getValue(DoorBlock.OPEN)) {
+                s = s.setValue(DoorBlock.OPEN, false);
+                changed = true;
+            }
+            if (s.hasProperty(DoorBlock.POWERED) && s.getValue(DoorBlock.POWERED)) {
+                s = s.setValue(DoorBlock.POWERED, false);
+                changed = true;
+            }
+            if (changed) {
+                level.setBlock(p, s, 3);
+                closed++;
             }
         }
+        return closed;
     }
 
 }

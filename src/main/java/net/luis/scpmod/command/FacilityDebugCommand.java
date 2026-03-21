@@ -3,7 +3,6 @@ package net.luis.scpmod.command;
 import com.mojang.brigadier.CommandDispatcher;
 import net.luis.scpmod.facility.building.FacilityManager;
 import net.luis.scpmod.facility.building.FacilityRoomInstance;
-import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -32,18 +31,6 @@ public class FacilityDebugCommand {
                             source.sendSuccess(() -> Component.literal(" - Zone: " + zoneName + " -> " + formatBounds(bounds)), false);
                         }
                     }
-
-                    return 1;
-                }));
-
-        dispatcher.register(Commands.literal("facility_debug_render")
-                .requires(source -> source.hasPermission(2))
-                .executes(ctx -> {
-                    ZoneDebugRenderer.SHOW_ZONES = !ZoneDebugRenderer.SHOW_ZONES;
-
-                    ctx.getSource().sendSuccess(() -> Component.literal("Zone rendering: ")
-                            .append(Component.literal(ZoneDebugRenderer.SHOW_ZONES ? "ON" : "OFF")
-                                    .withStyle(ZoneDebugRenderer.SHOW_ZONES ? ChatFormatting.GREEN : ChatFormatting.RED)), true);
 
                     return 1;
                 }));

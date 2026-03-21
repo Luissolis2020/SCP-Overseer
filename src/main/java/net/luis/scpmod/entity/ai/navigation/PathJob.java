@@ -1,6 +1,5 @@
 package net.luis.scpmod.entity.ai.navigation;
 
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
@@ -61,6 +60,29 @@ public abstract class PathJob {
         this.failed = false;
         this.ticksRunning = 0;
         this.retryCooldown = 0;
+    }
+
+    /**
+     * Stable key used for retry accounting and queue de-duplication.
+     * Defaults to the display name.
+     */
+    public String getRetryKey() {
+        return getName();
+    }
+
+    /** Number of attempts before the queue treats this job as permanently failed. */
+    public int getMaxFailureRetries() {
+        return 3;
+    }
+
+    /** Queue-level cooldown before retrying this job after a failure. */
+    public int getRetryDelayTicks() {
+        return 20;
+    }
+
+    /** Whether enqueue should de-duplicate jobs with the same retry key. */
+    public boolean shouldDeduplicate() {
+        return true;
     }
 
     public abstract String getName();

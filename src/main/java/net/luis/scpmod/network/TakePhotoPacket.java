@@ -2,6 +2,7 @@ package net.luis.scpmod.network;
 
 import net.luis.scpmod.pda.Mission;
 import net.luis.scpmod.pda.PDADataHandler;
+import net.luis.scpmod.research.ModResearchEntries;
 import net.luis.scpmod.research.ResearchManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
@@ -30,6 +31,14 @@ public class TakePhotoPacket {
         ctx.get().enqueueWork(() -> {
             ServerPlayer player = ctx.get().getSender();
             if (player == null) {
+                return;
+            }
+
+            if (ModResearchEntries.get(id) == null) {
+                player.displayClientMessage(
+                        net.minecraft.network.chat.Component.literal("Invalid research target."),
+                        true
+                );
                 return;
             }
 

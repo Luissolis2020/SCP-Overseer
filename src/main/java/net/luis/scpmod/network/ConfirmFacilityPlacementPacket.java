@@ -67,6 +67,10 @@ public class ConfirmFacilityPlacementPacket {
 
             // Create and register room
             FacilityBlueprint blueprint = FacilityBlueprintLoader.get(structureId);
+            if (blueprint == null) {
+                player.sendSystemMessage(Component.literal("Unknown facility blueprint: " + structureId));
+                return;
+            }
             FacilityRoomInstance room = new FacilityRoomInstance(blueprint, pos, rotation);
             room.state = ConstructionState.PLANNED;
             room.setOwner(player.getUUID());

@@ -16,7 +16,7 @@ public class ResearchManager extends SavedData {
     private final Map<UUID, Map<ResourceLocation, ResearchStage>> perPlayer = new HashMap<>();
 
     public static ResearchManager get(ServerPlayer player) {
-        return player.server.getLevel(player.level().dimension())
+        return player.server.overworld()
                 .getDataStorage().computeIfAbsent(ResearchManager::fromNbt, ResearchManager::new, SAVE_NAME);
     }
 

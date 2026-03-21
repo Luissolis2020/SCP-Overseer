@@ -30,6 +30,10 @@ public class SCP124EventHandler {
         getTracked(level.dimension()).add(pos.immutable());
     }
 
+    public static void clearAllTracked() {
+        trackedByDim.clear();
+    }
+
     @SubscribeEvent
     public static void onWorldTick(TickEvent.LevelTickEvent event) {
         if (event.level.isClientSide || event.phase != TickEvent.Phase.END) return;

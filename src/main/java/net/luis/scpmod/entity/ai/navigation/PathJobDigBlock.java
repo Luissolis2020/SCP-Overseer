@@ -2,13 +2,10 @@ package net.luis.scpmod.entity.ai.navigation;
 
 import net.luis.scpmod.entity.custom.BuilderNPC;
 import net.luis.scpmod.facility.construction.ConstructionSite;
-import net.luis.scpmod.facility.building.FacilityManager;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
 import javax.annotation.Nullable;
@@ -16,6 +13,7 @@ import javax.annotation.Nullable;
 public class PathJobDigBlock extends PathJob {
 
     private final BuilderNPC builder;
+    private final @Nullable ConstructionSite site;
     private final BlockPos target;
     private final boolean isIntruder;
 
@@ -29,9 +27,10 @@ public class PathJobDigBlock extends PathJob {
     private int repathAttempts = 0;
     private static final int MAX_REPATH_ATTEMPTS = 6;
 
-    public PathJobDigBlock(BuilderNPC builder, BlockPos target, boolean isIntruder) {
+    public PathJobDigBlock(BuilderNPC builder, @Nullable ConstructionSite site, BlockPos target, boolean isIntruder) {
         super(builder);
         this.builder = builder;
+        this.site = site;
         this.target = target.immutable();
         this.isIntruder = isIntruder;
     }
@@ -66,8 +65,15 @@ public class PathJobDigBlock extends PathJob {
 
         standPos = builder.findStandPosForDig(level, target);
         if (standPos == null) {
+            if (builder.canDirectDigFallback(level, target)) {
+                navigating = false;
+                this.started = true;
+                builder.holdItemTemporarily(new ItemStack(Items.IRON_SHOVEL));
+                System.out.println("[PathJobDigBlock] No standPos for target " + target + ", using direct-dig fallback.");
+                return;
+            }
             System.out.println("[PathJobDigBlock] No standPos for target " + target + ", failing.");
-            builder.markBadTask(level, target);
+            builder.markBadDigTask(level, target);
             this.failed = true;
             return;
         }
@@ -79,11 +85,12 @@ public class PathJobDigBlock extends PathJob {
         }
 
         // Try to path; if fails, try alternate stand candidates
-        if (builder.getNavigation().createPath(standPos, 0) == null) {
+        var initialPath = builder.getNavigation().createPath(standPos, 0);
+        if (initialPath == null || !initialPath.canReach()) {
             builder.markBadStand(level, standPos);
 
             if (!trySwitchStandAndRepath(level, target)) {
-                builder.markBadTask(level, target);
+                builder.markBadDigTask(level, target);
                 System.out.println("[PathJobDigBlock] No path to ANY standPos for " + target + ", failing.");
                 this.failed = true;
                 return;
@@ -95,15 +102,13 @@ public class PathJobDigBlock extends PathJob {
             return;
         }
 
-        boolean startedNav = builder.getNavigation().moveTo(
-                standPos.getX() + 0.5, standPos.getY(), standPos.getZ() + 0.5, 1.0
-        );
+        boolean startedNav = builder.getNavigation().moveTo(initialPath, builder.getNavigationSpeed());
 
         if (!startedNav) {
             builder.markBadStand(level, standPos);
 
             if (!trySwitchStandAndRepath(level, target)) {
-                builder.markBadTask(level, target);
+                builder.markBadDigTask(level, target);
                 System.out.println("[PathJobDigBlock] Failed to start nav to ANY standPos for " + target);
                 this.failed = true;
                 return;
@@ -133,14 +138,19 @@ public class PathJobDigBlock extends PathJob {
 
         if (standPos == null) {
             standPos = builder.findStandPosForDig(level, target);
-            if (standPos == null) { this.failed = true; return; }
+            if (standPos == null) {
+                if (!builder.canDirectDigFallback(level, target)) {
+                    this.failed = true;
+                    return;
+                }
+            }
         }
 
         if (standPos != null && !builder.isStandable(level, standPos)) {
             builder.markBadStand(level, standPos);
             if (trySwitchStandAndRepath(level, target)) return;
 
-            builder.markBadTask(level, target);
+            builder.markBadDigTask(level, target);
             this.failed = true;
             builder.clearHeldItem();
             return;
@@ -159,7 +169,7 @@ public class PathJobDigBlock extends PathJob {
 
                 if (stuckTicks > MAX_STUCK_TICKS) {
                     System.out.println("[PathJobDigBlock] Stuck reaching standPos " + standPos + " for " + target);
-                    builder.markBadTask(level, target);
+                    builder.markBadDigTask(level, target);
                     this.failed = true;
                     builder.clearHeldItem();
                 }
@@ -190,7 +200,7 @@ public class PathJobDigBlock extends PathJob {
     }
 
     private int calculateDigTicks(BlockState state) {
-        return state.isAir() ? 1 : 2;
+        return state.isAir() ? 1 : builder.getDigTicksPerBlock();
     }
 
     @Override
@@ -200,10 +210,8 @@ public class PathJobDigBlock extends PathJob {
 
     private void completeDigIfNeeded() {
         if (!isIntruder) {
-            ConstructionSite site = builder.getAssignedSite();
             if (site != null) {
                 site.markDigComplete(target);
-                FacilityManager.get((ServerLevel) builder.level()).saveConstructionSite(site);
             }
         }
     }
@@ -213,16 +221,15 @@ public class PathJobDigBlock extends PathJob {
         if (this.completed) return false;
         // If builder lost the site, don't retry forever
         if (!builder.hasSite()) return true;
+        if (!isIntruder && (site == null || builder.getAssignedSite() != site)) return true;
         if (builder.isTaskBlacklisted(level, target)) return true;
 
         BlockState current = level.getBlockState(target);
         if (current.isAir()) {
             // IMPORTANT: remove from dig queue so builder doesn't keep selecting it
             if (!isIntruder) {
-                ConstructionSite site = builder.getAssignedSite();
                 if (site != null) {
                     site.markDigComplete(target);
-                    FacilityManager.get(level).saveConstructionSite(site);
                 }
             }
             return true;
@@ -230,12 +237,10 @@ public class PathJobDigBlock extends PathJob {
 
         // If this target is inside footprint but expected block is already present, abort
         if (!isIntruder) {
-            ConstructionSite site = builder.getAssignedSite();
             if (site != null) {
                 BlockState expected = site.getExpectedBlockState(target);
                 if (expected != null && current.equals(expected)) {
                     site.markDigComplete(target);
-                    FacilityManager.get(level).saveConstructionSite(site);
                     return true;
                 }
             }
@@ -250,9 +255,11 @@ public class PathJobDigBlock extends PathJob {
         for (BlockPos stand : builder.findStandCandidatesForDig(level, target)) {
             if (builder.isStandBlacklisted(level, stand)) continue;
             if (!builder.isStandable(level, stand)) continue;
-            if (builder.getNavigation().createPath(stand, 0) == null) continue;
+            if (!builder.canReachStandNow(level, stand)) continue;
+            var path = builder.getNavigation().createPath(stand, 0);
+            if (path == null || !path.canReach()) continue;
 
-            boolean ok = builder.getNavigation().moveTo(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5, 1.0);
+            boolean ok = builder.getNavigation().moveTo(path, builder.getNavigationSpeed());
             if (ok) {
                 standPos = stand.immutable();
                 navigating = true;

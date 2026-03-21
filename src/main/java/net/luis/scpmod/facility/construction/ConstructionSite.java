@@ -23,6 +23,10 @@ public class ConstructionSite {
     private final ResourceLocation structureId;
     private final StructureTemplate template;
     private final StructurePlaceSettings settings;
+    private final int footprintMinOffsetX;
+    private final int footprintMaxOffsetX;
+    private final int footprintMinOffsetZ;
+    private final int footprintMaxOffsetZ;
 
     private BuilderNPC assignedBuilder;
     private int progress;
@@ -39,7 +43,7 @@ public class ConstructionSite {
     private int totalWorkUnitsEnqueued = 0;
 
     private long lastSaveTick = -9999;
-    private static final int SAVE_COOLDOWN_TICKS = 20; // 1 second
+    private static final int SAVE_COOLDOWN_TICKS = 80; // 4 seconds
 
     private final Map<BlockPos, Integer> placeFailCount = new HashMap<>();
     private final Map<BlockPos, Long> placeCooldownUntil = new HashMap<>();
@@ -50,6 +54,11 @@ public class ConstructionSite {
         this.structureId = structureId;
         this.template = template;
         this.settings = settings;
+        int[] footprint = computeFootprintOffsets(template, settings);
+        this.footprintMinOffsetX = footprint[0];
+        this.footprintMaxOffsetX = footprint[1];
+        this.footprintMinOffsetZ = footprint[2];
+        this.footprintMaxOffsetZ = footprint[3];
         this.state = ConstructionState.PLANNED;
 
         // Build expected block map immediately
@@ -167,10 +176,14 @@ public class ConstructionSite {
 
                 BlockPos stand = builder.findStandPosForDig(level, pos);
                 if (stand == null) {
-                    builder.markBadTask(level, pos);
-                    continue;
+                    // Local fallback for final isolated high/awkward blocks after deep carving.
+                    if (!builder.canDirectDigFallback(level, pos)) {
+                        // Do not blacklist here; reachability can change after repositioning.
+                        continue;
+                    }
+                } else {
+                    if (builder.isStandBlacklisted(level, stand)) continue;
                 }
-                if (builder.isStandBlacklisted(level, stand)) continue;
 
                 double dist = pos.distSqr(from);
 
@@ -307,21 +320,42 @@ public class ConstructionSite {
 
     // --- Footprint Check ---
     public boolean isInsideFootprint(BlockPos pos) {
-        int w = getFootprintWidth();
-        int d = getFootprintDepth();
-
-        return pos.getX() >= origin.getX()
-                && pos.getX() < origin.getX() + w
+        return pos.getX() >= getFootprintMinX()
+                && pos.getX() <= getFootprintMaxX()
                 && pos.getY() >= origin.getY()
-                && pos.getY() < origin.getY() + getHeight()
-                && pos.getZ() >= origin.getZ()
-                && pos.getZ() < origin.getZ() + d;
+                && pos.getY() <= origin.getY() + getHeight() - 1
+                && pos.getZ() >= getFootprintMinZ()
+                && pos.getZ() <= getFootprintMaxZ();
     }
 
     // --- Dimension Info ---
     public int getWidth() { return template.getSize().getX(); }
     public int getHeight() { return template.getSize().getY(); }
     public int getDepth() { return template.getSize().getZ(); }
+
+    private static int[] computeFootprintOffsets(StructureTemplate template, StructurePlaceSettings settings) {
+        int w = template.getSize().getX();
+        int d = template.getSize().getZ();
+
+        int[] xs = new int[]{0, Math.max(0, w - 1)};
+        int[] zs = new int[]{0, Math.max(0, d - 1)};
+
+        int minX = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+
+        for (int x : xs) {
+            for (int z : zs) {
+                BlockPos transformed = StructureTemplate.calculateRelativePosition(settings, new BlockPos(x, 0, z));
+                minX = Math.min(minX, transformed.getX());
+                maxX = Math.max(maxX, transformed.getX());
+                minZ = Math.min(minZ, transformed.getZ());
+                maxZ = Math.max(maxZ, transformed.getZ());
+            }
+        }
+        return new int[]{minX, maxX, minZ, maxZ};
+    }
 
     // --- Deferred Placement Types ---
     private boolean shouldDeferPlacement(BlockState state) {
@@ -446,6 +480,10 @@ public class ConstructionSite {
 
             if (state.isAir()) continue;
 
+            // Match vanilla structure placement transform:
+            // world position is transformed, and so must the blockstate properties (facing/half/part/etc.).
+            state = state.mirror(settings.getMirror()).rotate(settings.getRotation());
+
             BlockPos worldPos = StructureTemplate.calculateRelativePosition(settings, info.pos()).offset(origin);
             expectedBlocks.put(worldPos.immutable(), state);
             included++;
@@ -494,11 +532,16 @@ public class ConstructionSite {
     }
 
     public void deferPlacementTask(BlockPlacementTask task) {
-        // Remove from build layers if present
+        // Remove from all queues first
         removePlacementFromAllLayers(buildLayers, task.worldPos());
         removePlacementFromAllLayers(deferredLayers, task.worldPos());
+        removePlacementFromAllLayers(scaffoldLayers, task.worldPos());
 
-        deferredLayers.computeIfAbsent(task.worldPos().getY(), y -> new LinkedList<>()).add(task);
+        if (task.state().is(Blocks.SCAFFOLDING)) {
+            scaffoldLayers.computeIfAbsent(task.worldPos().getY(), y -> new LinkedList<>()).add(task);
+        } else {
+            deferredLayers.computeIfAbsent(task.worldPos().getY(), y -> new LinkedList<>()).add(task);
+        }
         buildStages.put(task.worldPos(), BuildStage.PLACE_PENDING);
         markDirty();
     }
@@ -510,6 +553,10 @@ public class ConstructionSite {
             for (BlockPlacementTask task : layer) {
                 BlockState current = level.getBlockState(task.worldPos());
                 BlockState desired = task.state();
+
+                if (isPlacementOnCooldown(level, task.worldPos())) {
+                    continue;
+                }
 
                 if (current.equals(desired)) {
                     markPlacementComplete(task.worldPos());
@@ -559,6 +606,7 @@ public class ConstructionSite {
     public void enqueueScaffold(ServerLevel level, BlockPos pos) {
         BlockState cur = level.getBlockState(pos);
         if (cur.is(Blocks.SCAFFOLDING)) return;
+        if (isPlacementQueued(scaffoldLayers, pos)) return;
 
         // don't scaffold inside structure-required positions
         BlockState expected = expectedBlocks.get(pos);
@@ -569,6 +617,15 @@ public class ConstructionSite {
         markDirty();
     }
 
+    private boolean isPlacementQueued(TreeMap<Integer, Queue<BlockPlacementTask>> layers, BlockPos pos) {
+        for (Queue<BlockPlacementTask> queue : layers.values()) {
+            for (BlockPlacementTask task : queue) {
+                if (task.worldPos().equals(pos)) return true;
+            }
+        }
+        return false;
+    }
+
     public void markScaffoldPlaced(BlockPos pos) {
         removePlacementFromAllLayers(scaffoldLayers, pos);
         placedScaffolds.add(pos.immutable());
@@ -577,6 +634,20 @@ public class ConstructionSite {
 
     public Set<BlockPos> getPlacedScaffolds() {
         return placedScaffolds;
+    }
+
+    public int discardPendingScaffoldTasks() {
+        int removed = scaffoldLayers.values().stream().mapToInt(Queue::size).sum();
+        if (removed <= 0) return 0;
+
+        for (Queue<BlockPlacementTask> layer : scaffoldLayers.values()) {
+            for (BlockPlacementTask task : layer) {
+                buildStages.put(task.worldPos(), BuildStage.PLACED);
+            }
+        }
+        scaffoldLayers.clear();
+        markDirty();
+        return removed;
     }
 
     public boolean planScaffoldFor(ServerLevel level, BlockPos target) {
@@ -634,24 +705,45 @@ public class ConstructionSite {
     }
 
     private List<BlockPos> findStandCandidates(ServerLevel level, BlockPos target) {
-        List<BlockPos> out = new ArrayList<>();
-        for (int dy : new int[]{0, 1, -1}) {
+        List<BlockPos> outsidePreferred = new ArrayList<>();
+        List<BlockPos> outside = new ArrayList<>();
+        List<BlockPos> insidePreferred = new ArrayList<>();
+        List<BlockPos> insideFallback = new ArrayList<>();
+        for (int dy : new int[]{0, 1, -1, 2, -2, 3, -3}) {
             BlockPos base = target.offset(0, dy, 0);
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
                     if (dx == 0 && dz == 0) continue;
                     BlockPos stand = base.offset(dx, 0, dz);
-
-                    if (isInsideFootprint(stand) || isInsideFootprint(stand.below())) continue;
                     BlockState feet = level.getBlockState(stand);
                     BlockState head = level.getBlockState(stand.above());
                     if ((!feet.isAir() && !feet.canBeReplaced()) || (!head.isAir() && !head.canBeReplaced())) continue;
+                    boolean inside = isInsideFootprint(stand) || isInsideFootprint(stand.below());
+                    boolean reuseScaffoldColumn = level.getBlockState(stand.below()).is(Blocks.SCAFFOLDING)
+                            || isPlacementQueued(scaffoldLayers, stand.below());
 
-                    out.add(stand);
+                    if (!inside) {
+                        if (reuseScaffoldColumn) outsidePreferred.add(stand.immutable());
+                        else outside.add(stand.immutable());
+                    } else {
+                        // Enclosed underground/mountain layouts may have no valid exterior scaffold stand.
+                        // Allow interior fallback only in cells expected to remain air.
+                        BlockState expectedFeet = getExpectedBlockState(stand);
+                        BlockState expectedHead = getExpectedBlockState(stand.above());
+                        boolean expectedClearFeet = expectedFeet == null || expectedFeet.isAir();
+                        boolean expectedClearHead = expectedHead == null || expectedHead.isAir();
+                        if (expectedClearFeet && expectedClearHead) {
+                            if (reuseScaffoldColumn) insidePreferred.add(stand.immutable());
+                            else insideFallback.add(stand.immutable());
+                        }
+                    }
                 }
             }
         }
-        return out;
+        if (!outsidePreferred.isEmpty()) return outsidePreferred;
+        if (!outside.isEmpty()) return outside;
+        if (!insidePreferred.isEmpty()) return insidePreferred;
+        return insideFallback;
     }
 
     public boolean isDigPending(BlockPos pos) {
@@ -663,30 +755,69 @@ public class ConstructionSite {
         BlockPos best = null;
         double bestDistSq = Double.POSITIVE_INFINITY;
 
-        int w = getFootprintWidth();
-        int depth = getFootprintDepth();
+        int fpMinX = getFootprintMinX();
+        int fpMaxX = getFootprintMaxX();
+        int fpMinZ = getFootprintMinZ();
+        int fpMaxZ = getFootprintMaxZ();
 
-        int minX = origin.getX() - searchRadius;
-        int maxX = origin.getX() + w + searchRadius;
-        int minZ = origin.getZ() - searchRadius;
-        int maxZ = origin.getZ() + depth + searchRadius;
+        int minX = fpMinX - searchRadius;
+        int maxX = fpMaxX + searchRadius;
+        int minZ = fpMinZ - searchRadius;
+        int maxZ = fpMaxZ + searchRadius;
+        int[] yCandidates = buildExteriorStandYCandidates(level, from);
+        int reachChecks = 0;
+        final int maxReachChecks = 192;
 
+        exteriorScan:
         for (int x = minX; x <= maxX; x++) {
             for (int z = minZ; z <= maxZ; z++) {
                 boolean outside =
-                        x < origin.getX() || x >= origin.getX() + w ||
-                                z < origin.getZ() || z >= origin.getZ() + depth;
+                        x < fpMinX || x > fpMaxX ||
+                                z < fpMinZ || z > fpMaxZ;
                 if (!outside) continue;
 
-                for (int dy : new int[]{0, 1, -1, 2, -2}) {
-                    BlockPos stand = new BlockPos(x, from.getY() + dy, z);
+                for (int y : yCandidates) {
+                    BlockPos stand = new BlockPos(x, y, z);
+                    double distSq = stand.distSqr(from);
+                    if (distSq < 4.0) continue; // avoid no-op "escape" to current/adjacent block
+                    if (distSq >= bestDistSq) continue;
 
                     if (!builder.isStandable(level, stand)) continue;
                     if (builder.isStandBlacklisted(level, stand)) continue;
-                    if (builder.getNavigation().createPath(stand, 0) == null) continue;
 
-                    double distSq = stand.distSqr(from);
+                    if (reachChecks++ >= maxReachChecks) {
+                        break exteriorScan;
+                    }
+                    if (!builder.canReachStandNow(level, stand)) continue;
+
                     if (distSq < bestDistSq) {
+                        bestDistSq = distSq;
+                        best = stand.immutable();
+                    }
+                }
+            }
+        }
+
+        // Fallback for mountain/underground layouts: if no exterior point is reachable,
+        // allow a reachable stand on/inside the footprint envelope.
+        if (best == null && reachChecks < maxReachChecks) {
+            interiorScan:
+            for (int x = fpMinX; x <= fpMaxX; x++) {
+                for (int z = fpMinZ; z <= fpMaxZ; z++) {
+                    for (int y : yCandidates) {
+                        BlockPos stand = new BlockPos(x, y, z);
+                        double distSq = stand.distSqr(from);
+                        if (distSq < 4.0) continue;
+                        if (distSq >= bestDistSq) continue;
+
+                        if (!builder.isStandable(level, stand)) continue;
+                        if (builder.isStandBlacklisted(level, stand)) continue;
+
+                        if (reachChecks++ >= maxReachChecks) {
+                            break interiorScan;
+                        }
+                        if (!builder.canReachStandNow(level, stand)) continue;
+
                         bestDistSq = distSq;
                         best = stand.immutable();
                     }
@@ -696,18 +827,65 @@ public class ConstructionSite {
         return best;
     }
 
-    public int getFootprintWidth() {
-        return switch (settings.getRotation()) {
-            case CLOCKWISE_90, COUNTERCLOCKWISE_90 -> template.getSize().getZ();
-            default -> template.getSize().getX();
+    private int[] buildExteriorStandYCandidates(ServerLevel level, BlockPos from) {
+        int minY = level.getMinBuildHeight() + 1;
+        int maxY = level.getMaxBuildHeight() - 2;
+        int siteBottom = origin.getY();
+        int siteTop = origin.getY() + getHeight() - 1;
+        int siteMid = (siteBottom + siteTop) / 2;
+
+        LinkedHashSet<Integer> ys = new LinkedHashSet<>();
+        int[] anchors = new int[]{
+                from.getY(),
+                siteBottom,
+                siteBottom + 1,
+                siteMid,
+                siteTop
         };
+
+        int[] offsets = new int[]{0, 1, -1, 2, -2, 3, -3};
+        for (int base : anchors) {
+            for (int off : offsets) {
+                int y = base + off;
+                if (y < minY || y > maxY) continue;
+                ys.add(y);
+            }
+        }
+
+        if (ys.isEmpty()) {
+            ys.add(Math.max(minY, Math.min(maxY, from.getY())));
+        }
+        return ys.stream().mapToInt(Integer::intValue).toArray();
+    }
+
+    public int getFootprintWidth() {
+        return footprintMaxOffsetX - footprintMinOffsetX + 1;
     }
 
     public int getFootprintDepth() {
-        return switch (settings.getRotation()) {
-            case CLOCKWISE_90, COUNTERCLOCKWISE_90 -> template.getSize().getX();
-            default -> template.getSize().getZ();
-        };
+        return footprintMaxOffsetZ - footprintMinOffsetZ + 1;
+    }
+
+    public int getFootprintMinX() {
+        return origin.getX() + footprintMinOffsetX;
+    }
+
+    public int getFootprintMaxX() {
+        return origin.getX() + footprintMaxOffsetX;
+    }
+
+    public int getFootprintMinZ() {
+        return origin.getZ() + footprintMinOffsetZ;
+    }
+
+    public int getFootprintMaxZ() {
+        return origin.getZ() + footprintMaxOffsetZ;
+    }
+
+    public BlockPos getFootprintCenter() {
+        return new BlockPos((getFootprintMinX() + getFootprintMaxX()) / 2,
+                origin.getY(),
+                (getFootprintMinZ() + getFootprintMaxZ()) / 2);
     }
 
     public boolean isPlacementOnCooldown(ServerLevel level, BlockPos pos) {
@@ -719,7 +897,12 @@ public class ConstructionSite {
         int n = placeFailCount.getOrDefault(pos, 0) + 1;
         placeFailCount.put(pos.immutable(), n);
 
-        int backoff = Math.min(200, 10 + n * 20); // 0.5s + 1s per fail, cap 10s
+        int exp = Math.min(8, n); // cap exponential growth
+        int backoff = Math.min(1200, 20 << exp); // 20,40,80,... up to ~60s cap
         placeCooldownUntil.put(pos.immutable(), (long) (level.getServer().getTickCount() + backoff));
+    }
+
+    public int getPlacementFailCount(BlockPos pos) {
+        return placeFailCount.getOrDefault(pos, 0);
     }
 }

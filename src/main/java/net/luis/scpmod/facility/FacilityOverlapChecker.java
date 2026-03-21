@@ -23,6 +23,10 @@ public class FacilityOverlapChecker {
         getSet(level).clear();
     }
 
+    public static void clearAll() {
+        BOUNDS.clear();
+    }
+
     public static boolean isOverlapping(ServerLevel level, BlockPos origin, StructureTemplate template, StructurePlaceSettings settings) {
         BoundingBox previewBox = computeBox(origin, template, settings);
         for (BoundingBox existing : getSet(level)) {

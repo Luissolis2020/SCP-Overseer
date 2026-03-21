@@ -1,12 +1,11 @@
 package net.luis.scpmod.network;
 
 import net.luis.scpmod.client.ClientPreviewState;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
@@ -33,17 +32,19 @@ public class ActivateFacilityPreviewPacket {
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-            Minecraft mc = Minecraft.getInstance();
+        ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientHandler.handle(this)));
+        ctx.get().setPacketHandled(true);
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    private static final class ClientHandler {
+        private static void handle(ActivateFacilityPreviewPacket packet) {
+            var mc = net.minecraft.client.Minecraft.getInstance();
             if (mc.level == null || mc.getSingleplayerServer() == null) return;
 
-            StructureTemplate template = mc.getSingleplayerServer()
-                    .getStructureManager()
-                    .getOrCreate(structureId);
-
+            var template = mc.getSingleplayerServer().getStructureManager().getOrCreate(packet.structureId);
             StructurePlaceSettings settings = new StructurePlaceSettings();
-            ClientPreviewState.activate(pos, template, settings, structureId);
-        }));
-        ctx.get().setPacketHandled(true);
+            ClientPreviewState.activate(packet.pos, template, settings, packet.structureId);
+        }
     }
 }

@@ -29,7 +29,6 @@ public class SCPCommands {
         );
 
         GenerateBlueprintCommand.register(dispatcher);
-        FacilityDebugCommand.register(dispatcher);
     }
 }
 

@@ -7,6 +7,7 @@ import net.luis.scpmod.capability.MadnessCapability;
 import net.luis.scpmod.capability.MadnessProvider;
 import net.luis.scpmod.command.*;
 import net.luis.scpmod.entity.custom.CursedPlayer;
+import net.luis.scpmod.facility.FacilityOverlapChecker;
 import net.luis.scpmod.facility.building.FacilityManager;
 import net.luis.scpmod.facility.construction.ConstructionSite;
 import net.luis.scpmod.item.ModItems;
@@ -35,6 +36,7 @@ import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -75,9 +77,6 @@ public class ForgeEventBusEvents {
         FacilityDebugCommand.register(event.getDispatcher());
         FacilityPlaceCommand.register(event.getDispatcher());
         FacilityPreviewCommand.register(event.getDispatcher());
-        FacilityConfirmCommand.register(event.getDispatcher());
-        FacilityMoveCommand.register(event.getDispatcher());
-        FacilityRotateCommand.register(event.getDispatcher());
     }
 
     @SubscribeEvent
@@ -182,9 +181,6 @@ public class ForgeEventBusEvents {
                 player.getPersistentData().put("scpmod_drink_counter", savedData);
             });
 
-            CompoundTag anomalies = player.getPersistentData().getCompound("scpmod_discovered_anomalies");
-            player.getPersistentData().put("scpmod_discovered_anomalies", anomalies);
-
         }
     }
 
@@ -212,10 +208,21 @@ public class ForgeEventBusEvents {
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
         System.out.println("[SCPMod] onServerStarted - initializing facility manager");
+        FacilityManager.clearAll();
+        FacilityOverlapChecker.clearAll();
+        SCP124EventHandler.clearAllTracked();
+
         ServerLevel level = event.getServer().overworld();
         FacilityManager.get(level);
         var data = AnomalyFieldSavedData.get(level);
         data.ensureGenerated(level);
+    }
+
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        FacilityManager.clearAll();
+        FacilityOverlapChecker.clearAll();
+        SCP124EventHandler.clearAllTracked();
     }
 
 
