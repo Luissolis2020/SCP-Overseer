@@ -3,6 +3,7 @@ package net.luis.scpmod.entity.ai.navigation;
 import net.luis.scpmod.entity.custom.BuilderNPC;
 import net.luis.scpmod.facility.building.FacilityManager;
 import net.luis.scpmod.facility.construction.ConstructionSite;
+import net.luis.scpmod.facility.regression.BuilderRegressionTracker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -253,6 +254,7 @@ public class PathJobPlaceBlock extends PathJob {
 
     private void deferAndAbort(ServerLevel level, String reason) {
         System.out.println("[PathJobPlaceBlock] Deferring " + task.worldPos() + " (" + reason + ")");
+        BuilderRegressionTracker.get().recordDefer(site.getOrigin(), reason);
         builder.markBadTask(level, task.worldPos());
         site.markPlacementFailed(level, task.worldPos());
 

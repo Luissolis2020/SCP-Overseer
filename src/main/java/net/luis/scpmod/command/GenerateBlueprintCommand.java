@@ -1,24 +1,24 @@
 package net.luis.scpmod.command;
 
+import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.CommandDispatcher;
+import net.luis.scpmod.facility.connector.FacilityConnectorBlock;
 import net.luis.scpmod.mixin.StructureTemplateAccessor;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.commands.arguments.ResourceLocationArgument;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.Mth;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
+import net.minecraft.core.BlockPos;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -26,6 +26,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class GenerateBlueprintCommand {
+    private static final int DEFAULT_CONNECTOR_WIDTH = 3;
+    private static final int DEFAULT_CONNECTOR_HEIGHT = 3;
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
@@ -44,8 +47,6 @@ public class GenerateBlueprintCommand {
                                     }
 
                                     Map<String, Integer> materialCounts = new HashMap<>();
-                                    StructurePlaceSettings settings = new StructurePlaceSettings();
-
                                     List<StructureTemplate.Palette> palettes = ((StructureTemplateAccessor) template).getPalettes();
 
                                     if (palettes.isEmpty()) {
@@ -53,15 +54,34 @@ public class GenerateBlueprintCommand {
                                         return 0;
                                     }
 
-                                    List<StructureTemplate.StructureBlockInfo> blocks = palettes.get(0).blocks();
-                                    for (StructureTemplate.StructureBlockInfo info : blocks) {
-                                        Block block = info.state().getBlock();
-                                        if (!block.defaultBlockState().isAir()) {
-                                            Item item = block.asItem();
-                                            if (item != Items.AIR) {
-                                                String itemId = ForgeRegistries.ITEMS.getKey(item).toString();
-                                                materialCounts.merge(itemId, 1, Integer::sum);
+                                    Map<BlockPos, ConnectorExport> connectorsByPos = new HashMap<>();
+
+                                    for (StructureTemplate.Palette palette : palettes) {
+                                        for (StructureTemplate.StructureBlockInfo info : palette.blocks()) {
+                                            Block block = info.state().getBlock();
+                                            if (block.defaultBlockState().isAir()) continue;
+
+                                            if (block instanceof FacilityConnectorBlock connectorBlock) {
+                                                connectorsByPos.computeIfAbsent(info.pos(), ignored -> {
+                                                    var state = info.state();
+                                                    var facing = state.getValue(FacilityConnectorBlock.FACING);
+                                                    var type = state.getValue(FacilityConnectorBlock.TYPE);
+                                                    return new ConnectorExport(
+                                                            info.pos().immutable(),
+                                                            facing.getSerializedName().toUpperCase(Locale.ROOT),
+                                                            type.getSerializedName()
+                                                    );
+                                                });
+                                                continue;
                                             }
+
+                                            Item item = block.asItem();
+                                            if (item == Items.AIR) continue;
+
+                                            ResourceLocation itemKey = ForgeRegistries.ITEMS.getKey(item);
+                                            if (itemKey == null) continue;
+
+                                            materialCounts.merge(itemKey.toString(), 1, Integer::sum);
                                         }
                                     }
 
@@ -74,17 +94,51 @@ public class GenerateBlueprintCommand {
                                     json.addProperty("structureFile", structureId.toString());
 
                                     JsonObject materials = new JsonObject();
-                                    for (Map.Entry<String, Integer> entry : materialCounts.entrySet()) {
+                                    for (Map.Entry<String, Integer> entry : new TreeMap<>(materialCounts).entrySet()) {
                                         materials.addProperty(entry.getKey(), entry.getValue());
                                     }
                                     json.add("requiredMaterials", materials);
+
+                                    List<ConnectorExport> sortedConnectors = new ArrayList<>(connectorsByPos.values());
+                                    sortedConnectors.sort(Comparator
+                                            .comparing((ConnectorExport c) -> c.pos.getX())
+                                            .thenComparing(c -> c.pos.getY())
+                                            .thenComparing(c -> c.pos.getZ()));
+
+                                    JsonArray connectorsJson = new JsonArray();
+                                    int index = 1;
+                                    for (ConnectorExport connector : sortedConnectors) {
+                                        JsonObject c = new JsonObject();
+                                        c.addProperty("name", connector.type + "_" + String.format(Locale.ROOT, "%02d", index++));
+
+                                        JsonArray pos = new JsonArray();
+                                        pos.add(connector.pos.getX());
+                                        pos.add(connector.pos.getY());
+                                        pos.add(connector.pos.getZ());
+                                        c.add("pos", pos);
+
+                                        c.addProperty("dir", connector.dir);
+                                        c.addProperty("width", DEFAULT_CONNECTOR_WIDTH);
+                                        c.addProperty("height", DEFAULT_CONNECTOR_HEIGHT);
+                                        c.addProperty("ctype", connector.type); // Optional metadata for future filtering.
+                                        connectorsJson.add(c);
+                                    }
+                                    if (!sortedConnectors.isEmpty()) {
+                                        json.add("connectors", connectorsJson);
+                                    }
 
                                     File output = new File("generated/blueprints/" + structureId.getPath() + ".json");
                                     output.getParentFile().mkdirs();
 
                                     try (FileWriter writer = new FileWriter(output)) {
-                                        new GsonBuilder().setPrettyPrinting().create().toJson(json, writer);
-                                        source.sendSuccess(() -> Component.literal("Generated blueprint to: " + output.getAbsolutePath()), false);
+                                        GSON.toJson(json, writer);
+                                        int connectorCount = sortedConnectors.size();
+                                        int materialCount = materialCounts.size();
+                                        source.sendSuccess(() -> Component.literal(
+                                                "Generated blueprint to: " + output.getAbsolutePath()
+                                                        + " (materials=" + materialCount
+                                                        + ", connectors=" + connectorCount + ")"
+                                        ), false);
                                     } catch (Exception e) {
                                         e.printStackTrace();
                                         source.sendFailure(Component.literal("Error: " + e.getMessage()));
@@ -100,5 +154,8 @@ public class GenerateBlueprintCommand {
         return Arrays.stream(id.getPath().split("_"))
                 .map(s -> Character.toUpperCase(s.charAt(0)) + s.substring(1))
                 .collect(Collectors.joining(" "));
+    }
+
+    private record ConnectorExport(BlockPos pos, String dir, String type) {
     }
 }

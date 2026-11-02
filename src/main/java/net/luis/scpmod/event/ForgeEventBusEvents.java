@@ -10,11 +10,13 @@ import net.luis.scpmod.entity.custom.CursedPlayer;
 import net.luis.scpmod.facility.FacilityOverlapChecker;
 import net.luis.scpmod.facility.building.FacilityManager;
 import net.luis.scpmod.facility.construction.ConstructionSite;
+import net.luis.scpmod.facility.expansion.FacilityExpansionPlanner;
 import net.luis.scpmod.item.ModItems;
 import net.luis.scpmod.network.*;
 import net.luis.scpmod.pda.PDADataHandler;
 import net.luis.scpmod.pocket.PocketDimensionData;
 import net.luis.scpmod.pocket.PocketReturnData;
+import net.luis.scpmod.scpstate.SCPStateService;
 import net.luis.scpmod.research.ResearchManager;
 import net.luis.scpmod.research.ResearchStage;
 import net.luis.scpmod.worldgen.dimension.ModDimensions;
@@ -28,6 +30,8 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
@@ -35,6 +39,7 @@ import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -77,11 +82,13 @@ public class ForgeEventBusEvents {
         FacilityDebugCommand.register(event.getDispatcher());
         FacilityPlaceCommand.register(event.getDispatcher());
         FacilityPreviewCommand.register(event.getDispatcher());
+        BuilderRegressionCommand.register(event.getDispatcher());
     }
 
     @SubscribeEvent
     public static void registerCapabilities(RegisterCapabilitiesEvent event) {
         event.register(MadnessCapability.class);
+        event.register(DrinkCounterCapability.class);
     }
 
     @SubscribeEvent
@@ -153,6 +160,7 @@ public class ForgeEventBusEvents {
                                 room.getDisplayState(),
                                 room.getOrigin(),
                                 room.blueprint.id,
+                                room.getRotation().ordinal(),
                                 room.blueprint.width,
                                 room.blueprint.height,
                                 room.blueprint.depth,
@@ -206,6 +214,33 @@ public class ForgeEventBusEvents {
     }
 
     @SubscribeEvent
+    public static void onPdaUseOnBlock(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getLevel().isClientSide()) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (event.getHand() != InteractionHand.MAIN_HAND) return;
+        if (!event.getItemStack().is(ModItems.PDA.get())) return;
+
+        ServerLevel level = (ServerLevel) event.getLevel();
+        FacilityManager manager = FacilityManager.get(level);
+
+        FacilityExpansionPlanner.SocketRef socket = FacilityExpansionPlanner.findNearestAvailableSocket(
+                manager,
+                player,
+                event.getPos(),
+                6.25D
+        );
+        if (socket == null) return;
+
+        SCPModNetwork.sendToPlayer(
+                new OpenSocketExpansionMenuPacket(socket.room().getOrigin(), socket.connector().name),
+                player
+        );
+
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.SUCCESS);
+    }
+
+    @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
         System.out.println("[SCPMod] onServerStarted - initializing facility manager");
         FacilityManager.clearAll();
@@ -214,6 +249,7 @@ public class ForgeEventBusEvents {
 
         ServerLevel level = event.getServer().overworld();
         FacilityManager.get(level);
+        SCPStateService.onServerStarted(event.getServer());
         var data = AnomalyFieldSavedData.get(level);
         data.ensureGenerated(level);
     }

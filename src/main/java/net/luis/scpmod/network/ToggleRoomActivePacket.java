@@ -3,6 +3,7 @@ package net.luis.scpmod.network;
 import net.luis.scpmod.facility.FacilitySaveData;
 import net.luis.scpmod.facility.building.FacilityManager;
 import net.luis.scpmod.facility.building.FacilityRoomInstance;
+import net.luis.scpmod.facility.containment.SCPContainmentService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -59,6 +60,7 @@ public class ToggleRoomActivePacket {
                     manager.turnOnLights(player.serverLevel(), room);
                 } else {
                     manager.turnOffLights(player.serverLevel(), room);
+                    SCPContainmentService.onRoomDeactivated(player.serverLevel(), room.getOrigin());
                 }
 
                 player.sendSystemMessage(newState

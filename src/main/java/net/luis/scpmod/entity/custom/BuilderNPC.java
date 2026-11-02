@@ -5,6 +5,7 @@ import net.luis.scpmod.facility.building.FacilityManager;
 import net.luis.scpmod.facility.building.FacilityRoomInstance;
 import net.luis.scpmod.facility.construction.ConstructionSite;
 import net.luis.scpmod.facility.construction.ConstructionState;
+import net.luis.scpmod.facility.regression.BuilderRegressionTracker;
 import net.luis.scpmod.network.SCPModNetwork;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -862,6 +863,7 @@ public class BuilderNPC extends PathfinderMob {
         }
 
         noReachablePlacementStreak++;
+        BuilderRegressionTracker.get().recordNoReachablePlacement(site.getOrigin());
         if (noReachablePlacementStreak >= NO_REACHABLE_RECOVERY_TICKS && (buildPending + deferredPending) > 0) {
             int dropped = 0;
             if (scaffoldPending > 0) {
@@ -1325,6 +1327,9 @@ public class BuilderNPC extends PathfinderMob {
         if (this.currentPhase != phase) {
             System.out.println("[BuilderNPC] Phase changed to: " + phase);
             this.currentPhase = phase;
+            if (this.level() instanceof ServerLevel && this.assignedSite != null) {
+                BuilderRegressionTracker.get().recordPhaseChange(this.assignedSite.getOrigin());
+            }
         }
     }
 

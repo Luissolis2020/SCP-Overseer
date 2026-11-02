@@ -5,6 +5,8 @@ import net.luis.scpmod.facility.construction.ConstructionState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.phys.AABB;
 
 import java.util.*;
@@ -100,13 +102,9 @@ public class FacilityRoomInstance {
     }
 
     private static BlockPos rotateLocal(BlockPos p, Rotation rot, int w, int d) {
-        int x = p.getX(), y = p.getY(), z = p.getZ();
-        return switch (rot) {
-            case NONE -> p;
-            case CLOCKWISE_90 -> new BlockPos(d - 1 - z, y, x);
-            case CLOCKWISE_180 -> new BlockPos(w - 1 - x, y, d - 1 - z);
-            case COUNTERCLOCKWISE_90 -> new BlockPos(z, y, w - 1 - x);
-        };
+        if (rot == Rotation.NONE) return p;
+        StructurePlaceSettings settings = new StructurePlaceSettings().setRotation(rot);
+        return StructureTemplate.calculateRelativePosition(settings, p);
     }
     private static Direction rotateDirection(Direction d, Rotation rot) {
         if (d.getAxis() == Direction.Axis.Y) return d; // keep UP/DOWN unchanged

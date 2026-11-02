@@ -5,7 +5,10 @@ import net.luis.scpmod.facility.building.FacilityManager;
 import net.luis.scpmod.facility.building.FacilityRoomInstance;
 import net.luis.scpmod.pda.Mission;
 import net.luis.scpmod.pda.PDADataHandler;
+import net.luis.scpmod.progression.mission.MissionService;
 import net.luis.scpmod.research.ResearchProjects;
+import net.luis.scpmod.scpstate.SCPRecord;
+import net.luis.scpmod.scpstate.SCPWorldStateData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -14,6 +17,8 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class SCPModNetwork {
     private static final String PROTOCOL_VERSION = "1";
@@ -65,6 +70,22 @@ public class SCPModNetwork {
                 ActivateFacilityPreviewPacket::toBytes,
                 ActivateFacilityPreviewPacket::new,
                 ActivateFacilityPreviewPacket::handle
+        );
+
+        INSTANCE.registerMessage(
+                packetId++,
+                OpenSocketExpansionMenuPacket.class,
+                OpenSocketExpansionMenuPacket::encode,
+                OpenSocketExpansionMenuPacket::new,
+                OpenSocketExpansionMenuPacket::handle
+        );
+
+        INSTANCE.registerMessage(
+                packetId++,
+                RequestSocketExpansionPreviewPacket.class,
+                RequestSocketExpansionPreviewPacket::encode,
+                RequestSocketExpansionPreviewPacket::new,
+                RequestSocketExpansionPreviewPacket::handle
         );
 
         INSTANCE.registerMessage(
@@ -214,7 +235,13 @@ public class SCPModNetwork {
         var sortMode = PDADataHandler.loadSCPSortMode(player);
         int research = PDADataHandler.getResearchPoints(player);
         var bought = PDADataHandler.getBoughtResearchUnlocks(player);
-        sendToPlayer(new ClientboundPDASyncPacket(tabs, sortMode, research, bought), player);
+        Map<String, ClientboundPDASyncPacket.SCPStatusData> scpStatuses =
+                SCPWorldStateData.get(player.serverLevel().getServer()).getAll().entrySet().stream()
+                        .collect(Collectors.toMap(
+                                e -> e.getKey().toString(),
+                                e -> toStatusData(e.getValue())
+                        ));
+        sendToPlayer(new ClientboundPDASyncPacket(tabs, sortMode, research, bought, scpStatuses), player);
         var catalog = ResearchProjects.getCatalogSnapshot().stream()
                 .map(p -> new ClientboundResearchCatalogPacket.Entry(
                         p.id(),
@@ -255,6 +282,7 @@ public class SCPModNetwork {
                             room.getDisplayState(),
                             room.getOrigin(),
                             room.blueprint.id,
+                            room.getRotation().ordinal(),
                             room.blueprint.width,
                             room.blueprint.height,
                             room.blueprint.depth,
@@ -271,7 +299,7 @@ public class SCPModNetwork {
                 player
         );
         if (sendMission) {
-            var mission = PDADataHandler.loadMission(player);
+            var mission = MissionService.getCurrentMission(player);
             syncMissionTo(player, mission);
         }
     }
@@ -318,6 +346,7 @@ public class SCPModNetwork {
                             room.getDisplayState(),
                             room.getOrigin(),
                             room.blueprint.id,
+                            room.getRotation().ordinal(),
                             room.blueprint.width,
                             room.blueprint.height,
                             room.blueprint.depth,
@@ -329,6 +358,21 @@ public class SCPModNetwork {
                 .toList();
 
         sendToPlayer(new ClientboundFacilityRoomsPacket(rooms), player);
+    }
+
+    private static ClientboundPDASyncPacket.SCPStatusData toStatusData(SCPRecord record) {
+        boolean hasLast = record.getLastKnownPos() != null;
+        boolean hasRoom = record.getContainedRoomOrigin() != null;
+
+        return new ClientboundPDASyncPacket.SCPStatusData(
+                record.getState().name(),
+                record.getDimension() != null ? record.getDimension().toString() : "",
+                hasLast,
+                hasLast ? record.getLastKnownPos().asLong() : 0L,
+                hasRoom,
+                hasRoom ? record.getContainedRoomOrigin().asLong() : 0L,
+                record.getUpdatedGameTime()
+        );
     }
 
 }

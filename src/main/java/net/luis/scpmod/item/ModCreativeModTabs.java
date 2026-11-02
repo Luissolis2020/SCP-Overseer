@@ -56,6 +56,7 @@ public class ModCreativeModTabs {
                         pOutput.accept(ModBlocks.LIGHT_CONTAINMENT_CEILING.get());
                         pOutput.accept(ModBlocks.LIGHT_CONTAINMENT_LIGHT.get());
                         pOutput.accept(ModBlocks.GRATE.get());
+                        pOutput.accept(ModBlocks.FACILITY_CONNECTOR.get());
 
                         pOutput.accept(ModBlocks.CORRODED_CEILING.get());
                         pOutput.accept(ModBlocks.CORRODED_FLOOR.get());

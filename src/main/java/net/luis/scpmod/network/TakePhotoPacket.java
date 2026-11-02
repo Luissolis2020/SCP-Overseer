@@ -1,7 +1,8 @@
 package net.luis.scpmod.network;
 
-import net.luis.scpmod.pda.Mission;
 import net.luis.scpmod.pda.PDADataHandler;
+import net.luis.scpmod.progression.mission.MissionEventType;
+import net.luis.scpmod.progression.mission.MissionService;
 import net.luis.scpmod.research.ModResearchEntries;
 import net.luis.scpmod.research.ResearchManager;
 import net.minecraft.network.FriendlyByteBuf;
@@ -45,48 +46,11 @@ public class TakePhotoPacket {
             ResearchManager manager = ResearchManager.get(player);
             manager.advanceStage(player, id);
 
-            Mission mission = PDADataHandler.loadMission(player);
-
-            boolean missionChanged = false;
-            boolean completedNow = false;
-            Mission completedMission = null;
-
-            if ("find_anomalies".equals(mission.getId())) {
-                String key = id.toString();
-
-                Set<String> discovered = PDADataHandler.getDiscoveredAnomalies(player);
-                if (!discovered.contains(key)) {
-                    PDADataHandler.markAnomalyDiscovered(player, key);
-                    mission.incrementProgress();
-                    missionChanged = true;
-
-                    if (mission.isComplete()) {
-                        if (!PDADataHandler.isTabUnlocked(player, "FACILITY")) {
-                            PDADataHandler.unlockTab(player, "FACILITY");
-                        }
-
-                        completedNow = true;
-                        completedMission = mission;
-
-                        Mission next = new Mission(
-                                "build_facility",
-                                net.minecraft.network.chat.Component.literal("Establish Foundation Outpost"),
-                                net.minecraft.network.chat.Component.literal("Place and build the Foundation Starter Facility."),
-                                1
-                        );
-
-                        PDADataHandler.saveMission(player, next);
-                    } else {
-                        PDADataHandler.saveMission(player, mission);
-                    }
-                }
-            }
-
-            if (completedNow && completedMission != null) {
-                SCPModNetwork.syncMissionCompleteTo(player,
-                        completedMission.getId(),
-                        completedMission.getTitle()
-                );
+            String key = id.toString();
+            Set<String> discovered = PDADataHandler.getDiscoveredAnomalies(player);
+            if (!discovered.contains(key)) {
+                PDADataHandler.markAnomalyDiscovered(player, key);
+                MissionService.recordEvent(player, MissionEventType.DISCOVER_ANOMALY, key, 1);
             }
 
             SCPModNetwork.syncPDAStateTo(player, true);

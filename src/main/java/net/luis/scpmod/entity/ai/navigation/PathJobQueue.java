@@ -1,6 +1,7 @@
 package net.luis.scpmod.entity.ai.navigation;
 
 import net.luis.scpmod.entity.custom.BuilderNPC;
+import net.luis.scpmod.facility.regression.BuilderRegressionTracker;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.HashMap;
@@ -97,6 +98,9 @@ public class PathJobQueue {
             } else {
                 System.out.println("[PathJobQueue] Job failed permanently after " + attempts
                         + " attempts: " + job.getName());
+                if (builder.getAssignedSite() != null) {
+                    BuilderRegressionTracker.get().recordPermanentFailure(builder.getAssignedSite().getOrigin());
+                }
                 job.onAbort(level);
                 clearFailureState(job);
                 retryCooldown = 0;

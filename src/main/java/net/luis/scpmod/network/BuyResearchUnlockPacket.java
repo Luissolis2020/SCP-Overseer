@@ -1,6 +1,8 @@
 package net.luis.scpmod.network;
 
 import net.luis.scpmod.pda.PDADataHandler;
+import net.luis.scpmod.progression.mission.MissionEventType;
+import net.luis.scpmod.progression.mission.MissionService;
 import net.luis.scpmod.research.ResearchProjects;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -54,6 +56,7 @@ public class BuyResearchUnlockPacket {
 
             PDADataHandler.setResearchUnlockBought(player, unlockId, true);
             proj.effect().apply(player);
+            MissionService.recordEvent(player, MissionEventType.BUY_RESEARCH_UNLOCK, unlockId, 1);
 
             SCPModNetwork.syncPDAStateTo(player, true);
         });

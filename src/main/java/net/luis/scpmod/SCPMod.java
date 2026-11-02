@@ -10,6 +10,7 @@ import net.luis.scpmod.facility.building.FacilityBlueprintLoader;
 import net.luis.scpmod.item.ModCreativeModTabs;
 import net.luis.scpmod.item.ModItems;
 import net.luis.scpmod.network.SCPModNetwork;
+import net.luis.scpmod.progression.mission.MissionReloadListener;
 import net.luis.scpmod.pocket.PocketPrefabConfigLoader;
 import net.luis.scpmod.pocket.SCPProcessors;
 import net.luis.scpmod.research.ResearchProjectReloadListener;
@@ -60,8 +61,9 @@ public class SCPMod {
         event.addListener(new FacilityBlueprintLoader());
         event.addListener(new PocketPrefabConfigLoader());
         event.addListener(new ResearchProjectReloadListener());
+        event.addListener(new MissionReloadListener());
 
-        System.out.println("[SCPMod] Registered FacilityBlueprintLoader + PocketPrefabConfigLoader + ResearchProjectReloadListener.");
+        System.out.println("[SCPMod] Registered FacilityBlueprintLoader + PocketPrefabConfigLoader + ResearchProjectReloadListener + MissionReloadListener.");
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {

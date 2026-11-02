@@ -1,5 +1,6 @@
 package net.luis.scpmod.pda_gui.tabs;
 
+import net.luis.scpmod.client.ClientPDADataCache;
 import net.luis.scpmod.pda.PDADataHandler;
 import net.luis.scpmod.pda_gui.screens.PDAMenuScreen;
 import net.luis.scpmod.pda_gui.screens.SCPProfileScreen;
@@ -25,7 +26,6 @@ public class SCPListTab implements PDATab {
     private static final int MAX_SCROLL = 2000;
 
     private SortMode currentSort = SortMode.NUMBER;
-    private Button sortButton;
 
     public SCPListTab(PDAMenuScreen parent) {
         this.parent = parent;
@@ -50,6 +50,23 @@ public class SCPListTab implements PDATab {
         String title = "SCP Archives";
         int titleWidth = Minecraft.getInstance().font.width(title);
         guiGraphics.drawString(Minecraft.getInstance().font, title, (screenWidth - titleWidth) / 2, 30, 0xFFFFFF);
+
+        int contained = 0;
+        int wild = 0;
+        int missing = 0;
+        for (var status : ClientPDADataCache.getAllSCPStatuses()) {
+            switch (status.state()) {
+                case "CONTAINED" -> contained++;
+                case "WILD" -> wild++;
+                case "MISSING" -> missing++;
+                default -> {
+                }
+            }
+        }
+
+        String ops = "Ops: Contained " + contained + " | Wild " + wild + " | Missing " + missing;
+        int opsWidth = Minecraft.getInstance().font.width(ops);
+        guiGraphics.drawString(Minecraft.getInstance().font, ops, (screenWidth - opsWidth) / 2, 44, 0xAAAAAA);
     }
 
     @Override
@@ -60,6 +77,14 @@ public class SCPListTab implements PDATab {
 
         List<Button> buttons = new ArrayList<>();
         int screenWidth = Minecraft.getInstance().getWindow().getGuiScaledWidth();
+
+        buttons.add(Button.builder(Component.literal("Sort: " + currentSort.name()), b -> {
+                    cycleSortMode();
+                    parent.refreshCurrentTab();
+                })
+                .pos(screenWidth - 110, 35)
+                .size(100, 16)
+                .build());
 
         int columns = 3;
         int buttonWidth = 100;

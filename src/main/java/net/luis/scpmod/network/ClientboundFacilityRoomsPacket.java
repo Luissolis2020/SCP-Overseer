@@ -20,6 +20,7 @@ public class ClientboundFacilityRoomsPacket {
             String state,
             BlockPos origin,
             ResourceLocation blueprintId,
+            int rotationOrdinal,
             int width,
             int height,
             int depth,
@@ -40,13 +41,14 @@ public class ClientboundFacilityRoomsPacket {
             String state = buf.readUtf();
             BlockPos origin = buf.readBlockPos();
             ResourceLocation blueprintId = buf.readResourceLocation();
+            int rotationOrdinal = buf.readVarInt();
             int width = buf.readVarInt();
             int height = buf.readVarInt();
             int depth = buf.readVarInt();
             boolean isActive = buf.readBoolean();
             int progress = buf.readVarInt();
             boolean hasBuilder = buf.readBoolean();
-            rooms.add(new FacilityRoomData(name, state, origin, blueprintId, width, height, depth, isActive, progress, hasBuilder));
+            rooms.add(new FacilityRoomData(name, state, origin, blueprintId, rotationOrdinal, width, height, depth, isActive, progress, hasBuilder));
         }
     }
 
@@ -57,6 +59,7 @@ public class ClientboundFacilityRoomsPacket {
             buf.writeUtf(data.state());
             buf.writeBlockPos(data.origin());
             buf.writeResourceLocation(data.blueprintId());
+            buf.writeVarInt(data.rotationOrdinal());
             buf.writeVarInt(data.width());
             buf.writeVarInt(data.height());
             buf.writeVarInt(data.depth());

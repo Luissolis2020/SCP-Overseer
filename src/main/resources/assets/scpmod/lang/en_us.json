@@ -24,6 +24,7 @@
   "block.scpmod.light_containment_floor": "Light Containment Floor",
   "block.scpmod.light_containment_ceiling": "Light Containment Ceiling",
   "block.scpmod.light_containment_light": "Light Containment Light",
+  "block.scpmod.facility_connector": "Facility Connector Marker",
   "block.scpmod.grate": "Grate",
 
   "block.scpmod.corroded_lower": "Corroded Lower",

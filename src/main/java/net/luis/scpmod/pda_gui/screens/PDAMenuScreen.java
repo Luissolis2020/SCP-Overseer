@@ -10,6 +10,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
 
@@ -29,8 +30,6 @@ public class PDAMenuScreen extends Screen {
     private String popupMessage = "";
     private Runnable popupAction = null;
     private Button popupAcknowledgeButton = null;
-
-    private SCPListTab scpTab;
 
     public PDAMenuScreen() {
         this("MAIN_MENU");
@@ -110,21 +109,6 @@ public class PDAMenuScreen extends Screen {
             for (Button button : activeTab.getButtons()) {
                 addRenderableWidget(button);
                 currentTabButtons.add(button);
-            }
-
-            if ("SCP".equals(tab) && scpTab != null) {
-                Button sortButton = Button.builder(
-                                Component.literal("Sort: " + scpTab.getCurrentSort().name()), (b) -> {
-                                    scpTab.cycleSortMode();
-                                    b.setMessage(Component.literal("Sort: " + scpTab.getCurrentSort().name()));
-                                    switchTab("SCP");
-                                })
-                        .pos(this.width - 110, 35)
-                        .size(100, 16)
-                        .build();
-
-                addRenderableWidget(sortButton);
-                currentTabButtons.add(sortButton);
             }
 
         }
@@ -252,9 +236,35 @@ public class PDAMenuScreen extends Screen {
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         PDATab tab = tabs.get(currentTab);
         if (tab != null && tab.mouseScrolled(mouseX, mouseY, delta)) {
+            refreshCurrentTab();
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        PDATab tab = tabs.get(currentTab);
+        if (tab != null) {
+            double delta = 0.0;
+
+            if (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_W) {
+                delta = 1.0;
+            } else if (keyCode == GLFW.GLFW_KEY_DOWN || keyCode == GLFW.GLFW_KEY_S) {
+                delta = -1.0;
+            } else if (keyCode == GLFW.GLFW_KEY_PAGE_UP) {
+                delta = 4.0;
+            } else if (keyCode == GLFW.GLFW_KEY_PAGE_DOWN) {
+                delta = -4.0;
+            }
+
+            if (delta != 0.0 && tab.mouseScrolled(0, 0, delta)) {
+                refreshCurrentTab();
+                return true;
+            }
+        }
+
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     public void refreshCurrentTab() {

@@ -5,6 +5,7 @@ import net.luis.scpmod.SCPMod;
 import net.luis.scpmod.client.BuildPreviewState;
 import net.luis.scpmod.client.CameraScreenshotScheduler;
 import net.luis.scpmod.client.ClientPreviewState;
+import net.luis.scpmod.client.FacilityConnectorSocketRenderer;
 import net.luis.scpmod.client.GhostStructureRenderer;
 import net.luis.scpmod.client.gui.BuildingScreen;
 import net.luis.scpmod.command.ZoneDebugRenderer;
@@ -49,6 +50,7 @@ public class ClientForgeEvents {
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_PARTICLES) {
             ZoneDebugRenderer.render(event.getPoseStack(), event.getPartialTick(), event.getCamera());
+            FacilityConnectorSocketRenderer.render(event);
         }
     }
 

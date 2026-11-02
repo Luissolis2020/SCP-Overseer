@@ -1,5 +1,6 @@
 package net.luis.scpmod.pda;
 
+import net.luis.scpmod.progression.unlock.UnlockService;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
@@ -59,23 +60,14 @@ public class PDADataHandler {
     }
 
     public static void unlockTab(Player player, String tabId) {
-        CompoundTag persistentData = getPersistedRoot(player);
-        CompoundTag tabData = persistentData.getCompound(NBT_KEY);
-
-        tabData.putBoolean(tabId, true);
-        persistentData.put(NBT_KEY, tabData);
+        UnlockService.grantTab(player, tabId);
     }
 
     public static boolean isTabUnlocked(Player player, String tabId) {
-        CompoundTag persistentData = getPersistedRoot(player);
-        CompoundTag tabData = persistentData.getCompound(NBT_KEY);
-        return tabData.getBoolean(tabId);
+        return UnlockService.hasTab(player, tabId);
     }
 
     public static Set<String> getAllUnlockedTabs(Player player) {
-        CompoundTag persistentData = getPersistedRoot(player);
-        CompoundTag tabData = persistentData.getCompound(NBT_KEY);
-
         Set<String> unlocked = new HashSet<>();
 
         unlocked.add("MAIN_MENU");
@@ -85,11 +77,7 @@ public class PDADataHandler {
 //        unlocked.add("RESEARCH");
         unlocked.add("SCP");
 
-        for (String key : tabData.getAllKeys()) {
-            if (tabData.getBoolean(key)) {
-                unlocked.add(key);
-            }
-        }
+        unlocked.addAll(UnlockService.getUnlockedTabIds(player));
         return unlocked;
     }
 
@@ -263,4 +251,3 @@ public class PDADataHandler {
     }
 
 }
-

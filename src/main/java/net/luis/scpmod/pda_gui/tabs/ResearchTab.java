@@ -22,6 +22,8 @@ public class ResearchTab implements PDATab {
     private final PDAMenuScreen parent;
     private final List<Button> buttons = new ArrayList<>();
     private ResearchCategory selectedCategory = null;
+    private int scrollOffset = 0;
+    private int maxScroll = 0;
 
     private final Map<Button, String> projectButtonIds = new HashMap<>();
     private record ProjectState(boolean bought, boolean prereqsMet, boolean canAfford) {}
@@ -80,10 +82,13 @@ public class ResearchTab implements PDATab {
         projectButtonIds.clear();
 
         int sw = Minecraft.getInstance().getWindow().getGuiScaledWidth();
+        int sh = Minecraft.getInstance().getWindow().getGuiScaledHeight();
         int xLeft = sw / 2 - 140;
 
         // ===== Category hub =====
         if (selectedCategory == null) {
+            scrollOffset = 0;
+            maxScroll = 0;
             int y = 110;
 
             buttons.add(categoryButton(ResearchCategory.FACILITY, xLeft, y));
@@ -98,10 +103,14 @@ public class ResearchTab implements PDATab {
 
         // ===== Category view =====
         int y = 110;
+        int viewportTop = 86;
+        int viewportBottom = sh - 8;
 
         // Back button
         buttons.add(Button.builder(Component.literal("< Back"), b -> {
                     selectedCategory = null;
+                    scrollOffset = 0;
+                    maxScroll = 0;
                     selectedProjectId = null;
                     parent.refreshCurrentTab();
                 })
@@ -110,6 +119,8 @@ public class ResearchTab implements PDATab {
                 .build());
 
         y += 25;
+        int firstRowY = y;
+        y -= scrollOffset;
 
         // Sort projects: available first, then locked, then purchased last.
         List<ClientboundResearchCatalogPacket.Entry> list = ClientPDADataCache.getResearchCatalog().stream()
@@ -134,6 +145,7 @@ public class ResearchTab implements PDATab {
             else if (!canAfford) label = e.name() + " (Need " + cost + " RP)";
             else label = e.name() + " (" + cost + " RP)";
 
+            int drawY = y;
             Button btn = Button.builder(Component.literal(label), b -> {
                         selectedProjectId = e.id();
 
@@ -150,16 +162,24 @@ public class ResearchTab implements PDATab {
 
                         SCPModNetwork.sendToServer(new BuyResearchUnlockPacket(now.id()));
                     })
-                    .pos(xLeft, y)
+                    .pos(xLeft, drawY)
                     .size(280, 20)
                     .build();
 
             // UX: disable button when not purchasable (still shows tooltip on hover)
-            btn.active = !bought && prereqsMet && canAfford;
+            boolean visible = drawY >= viewportTop && drawY + 20 <= viewportBottom;
+            btn.visible = visible;
+            btn.active = visible && !bought && prereqsMet && canAfford;
 
             buttons.add(btn);
             projectButtonIds.put(btn, e.id());
             y += 23;
+        }
+
+        int contentBottomUnscrolled = firstRowY + list.size() * 23;
+        maxScroll = Math.max(0, contentBottomUnscrolled - (viewportBottom - 4));
+        if (scrollOffset > maxScroll) {
+            scrollOffset = maxScroll;
         }
 
         return buttons;
@@ -193,7 +213,14 @@ public class ResearchTab implements PDATab {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        return false;
+        if (selectedCategory == null || maxScroll <= 0) return false;
+
+        int old = scrollOffset;
+        int step = 18;
+        scrollOffset -= (int) Math.signum(delta) * step;
+        if (scrollOffset < 0) scrollOffset = 0;
+        if (scrollOffset > maxScroll) scrollOffset = maxScroll;
+        return old != scrollOffset;
     }
 
     private void drawProjectTooltip(GuiGraphics g, ClientboundResearchCatalogPacket.Entry proj,

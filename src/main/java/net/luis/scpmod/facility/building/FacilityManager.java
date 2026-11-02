@@ -5,8 +5,11 @@ import net.luis.scpmod.facility.FacilityOverlapChecker;
 import net.luis.scpmod.facility.FacilitySaveData;
 import net.luis.scpmod.facility.construction.ConstructionSite;
 import net.luis.scpmod.facility.construction.ConstructionState;
+import net.luis.scpmod.facility.regression.BuilderRegressionTracker;
 import net.luis.scpmod.mixin.StructureTemplateAccessor;
 import net.luis.scpmod.network.SCPModNetwork;
+import net.luis.scpmod.progression.mission.MissionEventType;
+import net.luis.scpmod.progression.mission.MissionService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -164,11 +167,28 @@ public class FacilityManager {
 
                 // Register site
                 this.registerConstructionSite(site);
+                BuilderRegressionTracker.get().startRun(
+                        level,
+                        createAutoRunId(site),
+                        site.getStructureId(),
+                        site.getSettings().getRotation(),
+                        inferBuildMode(site),
+                        site.getOrigin(),
+                        site.getTotalWorkUnits()
+                );
             });
         }
 
+        List<BlockPos> staleSavedRooms = new ArrayList<>();
         for (FacilitySaveData.SavedFacilityRoom saved : saveData.getSavedRooms().values()) {
             FacilityBlueprint blueprint = FacilityBlueprintLoader.get(saved.structureId());
+            if (blueprint == null) {
+                staleSavedRooms.add(saved.pos());
+                System.err.println("[FacilityManager] Missing blueprint '" + saved.structureId()
+                        + "' for saved room at " + saved.pos() + ". Skipping restore.");
+                continue;
+            }
+
             FacilityRoomInstance room = new FacilityRoomInstance(blueprint, saved.pos(), Rotation.values()[saved.rotation()]);
             room.setBuilt(saved.built());
             room.setActive(saved.active());
@@ -177,6 +197,11 @@ public class FacilityManager {
                 room.setOwner(saved.owner());
             }
             this.rooms.add(room);
+        }
+
+        if (!staleSavedRooms.isEmpty()) {
+            staleSavedRooms.forEach(pos -> saveData.getSavedRooms().remove(pos));
+            saveData.setDirty();
         }
 
         for (FacilityRoomInstance room : rooms) {
@@ -363,6 +388,12 @@ public class FacilityManager {
 
             SCPModNetwork.syncFacilityRoomsTo(player);
         }
+        if (room.getOwner() != null) {
+            ServerPlayer owner = level.getServer().getPlayerList().getPlayer(room.getOwner());
+            if (owner != null) {
+                MissionService.recordEvent(owner, MissionEventType.BUILD_FACILITY_ROOM, room.blueprint.id.toString(), 1);
+            }
+        }
         saveData.setDirty();
     }
 
@@ -421,6 +452,7 @@ public class FacilityManager {
             room.setBuilt(true);
             room.setActive(true);
             room.state = ConstructionState.BUILT;
+            openPassagesForRoom(level, room);
             onRoomBuilt(level, room);
         }
 
@@ -435,6 +467,14 @@ public class FacilityManager {
         site.getPlacedScaffolds().clear();
 
         int closedDoors = closeDoors(level, site);
+        BuilderRegressionTracker.get().completeRun(
+                level,
+                site.getOrigin(),
+                site.getCompletedWorkUnits(),
+                site.getTotalWorkUnits(),
+                removedScaffolds,
+                closedDoors
+        );
 
         // Completed site should not be reloaded as active construction.
         saveData.getSites().remove(site.getOrigin());
@@ -457,6 +497,18 @@ public class FacilityManager {
 
         System.out.println("[FacilityManager] Finalized site at " + site.getOrigin()
                 + " (scaffoldsRemoved=" + removedScaffolds + ", doorsClosed=" + closedDoors + ")");
+    }
+
+    private String createAutoRunId(ConstructionSite site) {
+        return "auto-" + Long.toString(System.currentTimeMillis(), 36)
+                + "-" + Long.toUnsignedString(site.getOrigin().asLong(), 36);
+    }
+
+    private String inferBuildMode(ConstructionSite site) {
+        int digPending = site.getDigLayers().values().stream().mapToInt(Queue::size).sum();
+        int expected = Math.max(1, site.getExpectedBlockStates().size());
+        double ratio = digPending / (double) expected;
+        return ratio >= 0.35 ? "auto-underground" : "auto-surface";
     }
 
     public void onSiteProgressMaybeSync(ServerLevel level, ConstructionSite site) {
@@ -612,6 +664,71 @@ public class FacilityManager {
             }
         }
         return closed;
+    }
+
+    private void openPassagesForRoom(ServerLevel level, FacilityRoomInstance room) {
+        if (!room.isBuilt()) return;
+
+        Set<String> openedPairs = new HashSet<>();
+        for (FacilityRoomInstance.WorldConnector connector : room.getWorldConnectors()) {
+            if (connector.worldDir.getAxis() == net.minecraft.core.Direction.Axis.Y) continue;
+
+            Match match = findOpposingBuiltConnector(room, connector);
+            if (match == null) continue;
+
+            String pairKey = pairKey(room, connector, match.room, match.connector);
+            if (!openedPairs.add(pairKey)) continue;
+
+            clearConnectorAperture(level, connector);
+            clearConnectorAperture(level, match.connector);
+        }
+    }
+
+    private Match findOpposingBuiltConnector(FacilityRoomInstance sourceRoom, FacilityRoomInstance.WorldConnector source) {
+        BlockPos expectedPos = source.worldPos.relative(source.worldDir);
+        var expectedDir = source.worldDir.getOpposite();
+
+        for (FacilityRoomInstance other : rooms) {
+            if (other == sourceRoom || !other.isBuilt()) continue;
+
+            for (FacilityRoomInstance.WorldConnector candidate : other.getWorldConnectors()) {
+                if (!candidate.worldPos.equals(expectedPos)) continue;
+                if (candidate.worldDir != expectedDir) continue;
+                return new Match(other, candidate);
+            }
+        }
+        return null;
+    }
+
+    private static void clearConnectorAperture(ServerLevel level, FacilityRoomInstance.WorldConnector connector) {
+        int width = Math.max(1, connector.width);
+        int height = Math.max(1, connector.height);
+
+        int xStart = -(width / 2);
+        int xEnd = xStart + width - 1;
+        int yStart = -(height / 2);
+        int yEnd = yStart + height - 1;
+        var side = connector.worldDir.getClockWise();
+
+        for (int sx = xStart; sx <= xEnd; sx++) {
+            for (int sy = yStart; sy <= yEnd; sy++) {
+                BlockPos p = connector.worldPos.relative(side, sx).above(sy);
+                if (level.getBlockState(p).is(Blocks.BEDROCK)) continue;
+                level.setBlock(p, Blocks.AIR.defaultBlockState(), 3);
+            }
+        }
+    }
+
+    private static String pairKey(FacilityRoomInstance a,
+                                  FacilityRoomInstance.WorldConnector ac,
+                                  FacilityRoomInstance b,
+                                  FacilityRoomInstance.WorldConnector bc) {
+        String left = a.getOrigin().asLong() + "|" + ac.name;
+        String right = b.getOrigin().asLong() + "|" + bc.name;
+        return (left.compareTo(right) <= 0) ? left + "<->" + right : right + "<->" + left;
+    }
+
+    private record Match(FacilityRoomInstance room, FacilityRoomInstance.WorldConnector connector) {
     }
 
 }

@@ -2,6 +2,8 @@ package net.luis.scpmod.research;
 
 import net.luis.scpmod.SCPMod;
 import net.luis.scpmod.pda.PDADataHandler;
+import net.luis.scpmod.progression.unlock.UnlockFlag;
+import net.luis.scpmod.progression.unlock.UnlockService;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.*;
@@ -58,7 +60,7 @@ public class ResearchProjects {
     private static final Set<String> WARNED_NO_EFFECT = new HashSet<>();
 
     static {
-        EFFECTS.put("facility_access", player -> PDADataHandler.unlockTab(player, "FACILITY"));
+        EFFECTS.put("facility_access", player -> UnlockService.grant(player, UnlockFlag.TAB_FACILITY));
 
         EFFECTS.put("field_scanner_upgrade_1", player -> {
             // TODO later: set a player flag / upgrade level.

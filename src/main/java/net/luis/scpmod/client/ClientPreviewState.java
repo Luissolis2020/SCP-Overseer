@@ -21,6 +21,7 @@ public class ClientPreviewState {
     private static StructureTemplate template = null;
     private static StructurePlaceSettings settings = new StructurePlaceSettings();
     private static ResourceLocation structureId;
+    private static boolean socketLocked = false;
 
     private static BuildPreviewState previewState = BuildPreviewState.NONE;
     private static List<AABB> serverOverlaps = Collections.emptyList();
@@ -29,11 +30,16 @@ public class ClientPreviewState {
     private static long lastOverlapRequestMs = 0;
 
     public static void activate(BlockPos pos, StructureTemplate templateIn, StructurePlaceSettings settingsIn, ResourceLocation id) {
+        activate(pos, templateIn, settingsIn, id, false);
+    }
+
+    public static void activate(BlockPos pos, StructureTemplate templateIn, StructurePlaceSettings settingsIn, ResourceLocation id, boolean lockToSocket) {
         active = true;
         previewPos = pos;
         template = templateIn;
         settings = settingsIn;
         structureId = id;
+        socketLocked = lockToSocket;
         previewState = BuildPreviewState.PLACEMENT_LOCKED;
         requestOverlapUpdate();
     }
@@ -43,6 +49,7 @@ public class ClientPreviewState {
         template = null;
         settings = new StructurePlaceSettings();
         structureId = null;
+        socketLocked = false;
         previewState = BuildPreviewState.NONE;
         serverOverlaps = Collections.emptyList();
         serverSaysOverlapping = false;
@@ -69,6 +76,7 @@ public class ClientPreviewState {
     }
 
     public static void rotateClockwise() {
+        if (socketLocked) return;
         settings.setRotation(switch (settings.getRotation()) {
             case NONE -> Rotation.CLOCKWISE_90;
             case CLOCKWISE_90 -> Rotation.CLOCKWISE_180;
@@ -109,6 +117,7 @@ public class ClientPreviewState {
         structureId = id;
         template = loaded;
         settings = new StructurePlaceSettings();
+        socketLocked = false;
         previewState = BuildPreviewState.PLACEMENT_LOCKED;
         requestOverlapUpdate();
     }
@@ -145,9 +154,13 @@ public class ClientPreviewState {
     }
 
     public static void movePreview(int dx, int dy, int dz) {
-        if (!active) return;
+        if (!active || socketLocked) return;
         previewPos = previewPos.offset(dx, dy, dz);
         requestOverlapUpdate();
+    }
+
+    public static boolean isSocketLocked() {
+        return socketLocked;
     }
 
 }

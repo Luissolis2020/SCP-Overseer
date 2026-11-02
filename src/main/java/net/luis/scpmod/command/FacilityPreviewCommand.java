@@ -11,6 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
@@ -37,7 +38,7 @@ public class FacilityPreviewCommand {
                                     }
 
                                     SCPModNetwork.sendToPlayer(
-                                            new ActivateFacilityPreviewPacket(pos, structureId),
+                                            new ActivateFacilityPreviewPacket(pos, structureId, Rotation.NONE, false),
                                             ctx.getSource().getPlayer()
                                     );
 

@@ -35,6 +35,7 @@ public class ModBlockLootTables extends BlockLootSubProvider {
         this.dropSelf(ModBlocks.LIGHT_CONTAINMENT_CEILING.get());
         this.dropSelf(ModBlocks.LIGHT_CONTAINMENT_FLOOR.get());
         this.dropSelf(ModBlocks.LIGHT_CONTAINMENT_LIGHT.get());
+        this.dropOther(ModBlocks.FACILITY_CONNECTOR.get(), ModBlocks.LIGHT_CONTAINMENT_MIDDLE.get());
         this.dropSelf(ModBlocks.GRATE.get());
         this.add(ModBlocks.CORRODED_CEILING.get(), block -> noDrop());
         this.add(ModBlocks.CORRODED_FLOOR.get(), block -> noDrop());

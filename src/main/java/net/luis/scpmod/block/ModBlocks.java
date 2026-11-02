@@ -3,6 +3,7 @@ package net.luis.scpmod.block;
 import net.luis.scpmod.SCPMod;
 import net.luis.scpmod.block.entity.CorrodedLightBlock;
 import net.luis.scpmod.block.entity.LightContainmentLightBlock;
+import net.luis.scpmod.facility.connector.FacilityConnectorBlock;
 import net.luis.scpmod.item.ModItems;
 import net.luis.scpmod.pocket.PocketConnectorBlock;
 import net.luis.scpmod.pocket.PocketExitTriggerBlock;
@@ -66,6 +67,8 @@ public class ModBlocks {
 
     public static final RegistryObject<Block> POCKET_CONNECTOR_BLOCK = registerBlock("pocket_connector",
             PocketConnectorBlock::new);
+    public static final RegistryObject<Block> FACILITY_CONNECTOR = registerBlock("facility_connector",
+            FacilityConnectorBlock::new);
     public static final RegistryObject<Block> POCKET_EXIT_BLOCK = registerBlock("pocket_exit_block", PocketExitTriggerBlock::new);
 
     public static final RegistryObject<Block> GRATE = registerBlock("grate",

@@ -8,6 +8,7 @@ import net.luis.scpmod.facility.building.FacilityManager;
 import net.luis.scpmod.facility.building.FacilityRoomInstance;
 import net.luis.scpmod.facility.construction.ConstructionSite;
 import net.luis.scpmod.facility.construction.ConstructionState;
+import net.luis.scpmod.facility.regression.BuilderRegressionTracker;
 import net.luis.scpmod.mixin.StructureTemplateAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -63,14 +64,15 @@ public class ConfirmFacilityPlacementPacket {
                 return;
             }
 
-            FacilityOverlapChecker.registerStructurePlacement(level, pos, template, settings);
-
             // Create and register room
             FacilityBlueprint blueprint = FacilityBlueprintLoader.get(structureId);
             if (blueprint == null) {
                 player.sendSystemMessage(Component.literal("Unknown facility blueprint: " + structureId));
                 return;
             }
+
+            FacilityOverlapChecker.registerStructurePlacement(level, pos, template, settings);
+
             FacilityRoomInstance room = new FacilityRoomInstance(blueprint, pos, rotation);
             room.state = ConstructionState.PLANNED;
             room.setOwner(player.getUUID());
@@ -139,6 +141,15 @@ public class ConfirmFacilityPlacementPacket {
                     + " totalWork=" + site.getTotalWorkUnits());
 
             manager.registerConstructionSite(site);
+            BuilderRegressionTracker.get().startRun(
+                    level,
+                    "preview-" + Long.toString(System.currentTimeMillis(), 36) + "-" + Long.toUnsignedString(pos.asLong(), 36),
+                    structureId,
+                    rotation,
+                    inferBuildMode(site),
+                    pos,
+                    site.getTotalWorkUnits()
+            );
 
             player.sendSystemMessage(Component.literal("Facility registered and awaiting construction."));
 
@@ -146,6 +157,13 @@ public class ConfirmFacilityPlacementPacket {
         });
 
         ctx.get().setPacketHandled(true);
+    }
+
+    private static String inferBuildMode(ConstructionSite site) {
+        int digPending = site.getDigLayers().values().stream().mapToInt(java.util.Queue::size).sum();
+        int expected = Math.max(1, site.getExpectedBlockStates().size());
+        double ratio = digPending / (double) expected;
+        return ratio >= 0.35 ? "auto-underground" : "auto-surface";
     }
 
 

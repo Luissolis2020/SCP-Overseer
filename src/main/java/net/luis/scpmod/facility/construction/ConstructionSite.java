@@ -2,6 +2,7 @@ package net.luis.scpmod.facility.construction;
 
 import net.luis.scpmod.entity.custom.BuilderNPC;
 import net.luis.scpmod.facility.building.FacilityManager;
+import net.luis.scpmod.facility.connector.FacilityConnectorBlock;
 import net.luis.scpmod.mixin.StructureTemplateAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -472,13 +473,22 @@ public class ConstructionSite {
 
         // Use the primary palette only
         var palette = palettes.get(0);
+        Map<BlockPos, BlockState> localPaletteStates = new HashMap<>();
+        for (StructureTemplate.StructureBlockInfo info : palette.blocks()) {
+            BlockState state = info.state();
+            if (state.is(Blocks.STRUCTURE_VOID)) continue;
+            localPaletteStates.put(info.pos().immutable(), state);
+        }
 
         int included = 0;
         for (StructureTemplate.StructureBlockInfo info : palette.blocks()) {
             BlockState state = info.state();
             if (state.is(Blocks.STRUCTURE_VOID)) continue;
-
             if (state.isAir()) continue;
+            if (state.getBlock() instanceof FacilityConnectorBlock) {
+                state = resolveConnectorReplacement(info.pos(), localPaletteStates);
+                if (state.isAir()) continue;
+            }
 
             // Match vanilla structure placement transform:
             // world position is transformed, and so must the blockstate properties (facing/half/part/etc.).
@@ -493,6 +503,35 @@ public class ConstructionSite {
                 + " paletteCount=" + palettes.size()
                 + " usingPalette=0"
                 + " at " + origin);
+    }
+
+    private static BlockState resolveConnectorReplacement(BlockPos connectorPos, Map<BlockPos, BlockState> paletteStates) {
+        Map<BlockState, Integer> neighborCounts = new LinkedHashMap<>();
+        int solidNeighborCount = 0;
+
+        for (Direction dir : Direction.values()) {
+            BlockState neighbor = paletteStates.get(connectorPos.relative(dir));
+            if (neighbor == null || neighbor.isAir() || neighbor.is(Blocks.STRUCTURE_VOID)) continue;
+            if (neighbor.getBlock() instanceof FacilityConnectorBlock) continue;
+
+            solidNeighborCount++;
+            neighborCounts.merge(neighbor, 1, Integer::sum);
+        }
+
+        // If the connector is mostly exposed (typical open socket), erase it after construction.
+        if (solidNeighborCount < 2 || neighborCounts.isEmpty()) {
+            return Blocks.AIR.defaultBlockState();
+        }
+
+        BlockState best = Blocks.AIR.defaultBlockState();
+        int bestCount = -1;
+        for (Map.Entry<BlockState, Integer> entry : neighborCounts.entrySet()) {
+            if (entry.getValue() > bestCount) {
+                best = entry.getKey();
+                bestCount = entry.getValue();
+            }
+        }
+        return best;
     }
 
     public void setTotalWorkUnitsEnqueued(int total) {

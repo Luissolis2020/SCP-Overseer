@@ -20,11 +20,12 @@ import java.util.List;
 
 public class FacilityTab implements PDATab {
 
-    private List<Button> buttons = new ArrayList<>();
+    private final List<Button> buttons = new ArrayList<>();
+    private int scrollOffset = 0;
+    private int maxScroll = 0;
 
-    public FacilityTab() {
-        updateButtons();
-    }
+    private static final int START_Y = 50;
+    private static final int ROW_SPACING = 25;
 
     private void updateButtons() {
         buttons.clear();
@@ -66,18 +67,42 @@ public class FacilityTab implements PDATab {
 
     @Override
     public void render(GuiGraphics guiGraphics, int screenWidth, int screenHeight, int mouseX, int mouseY) {
-        updateButtons(); // <- dynamically refresh buttons
         int startX = screenWidth / 2 - 100;
+
+        int contentHeight = START_Y + buttons.size() * ROW_SPACING;
+        int viewportHeight = Math.max(1, screenHeight - 46);
+        maxScroll = Math.max(0, contentHeight - viewportHeight);
+        if (scrollOffset > maxScroll) {
+            scrollOffset = maxScroll;
+        }
 
         for (int i = 0; i < buttons.size(); i++) {
             Button button = buttons.get(i);
-            button.setPosition(startX, 50 + i * 25);
+            int y = START_Y + i * ROW_SPACING - scrollOffset;
+            button.setPosition(startX, y);
+            boolean visible = y >= 46 && y + button.getHeight() <= screenHeight - 6;
+            button.visible = visible;
+            button.active = visible;
         }
     }
 
     @Override
     public List<Button> getButtons() {
+        updateButtons();
         return buttons;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (maxScroll <= 0) return false;
+
+        int old = scrollOffset;
+        int step = 18;
+        scrollOffset -= (int) Math.signum(delta) * step;
+        if (scrollOffset < 0) scrollOffset = 0;
+        if (scrollOffset > maxScroll) scrollOffset = maxScroll;
+
+        return old != scrollOffset;
     }
 
     private void startFacilityPreview(ResourceLocation facilityId) {

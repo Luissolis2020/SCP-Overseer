@@ -1,8 +1,10 @@
 package net.luis.scpmod.client;
 
 import net.luis.scpmod.network.ClientboundFacilityRoomsPacket;
+import net.luis.scpmod.network.ClientboundPDASyncPacket;
 import net.luis.scpmod.network.ClientboundResearchCatalogPacket;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.*;
 
@@ -15,6 +17,7 @@ public class ClientPDADataCache {
     private static int researchPoints = 0;
     private static final Set<String> boughtResearchUnlocks = new HashSet<>();
     private static final Map<String, ClientboundResearchCatalogPacket.Entry> researchCatalog = new HashMap<>();
+    private static final Map<String, ClientboundPDASyncPacket.SCPStatusData> scpStatuses = new HashMap<>();
 
 
     public static void setUnlockedTabs(Set<String> tabs) {
@@ -74,6 +77,19 @@ public class ClientPDADataCache {
 
     public static boolean isResearchUnlockBought(String id) {
         return boughtResearchUnlocks.contains(id);
+    }
+
+    public static void setSCPStatuses(Map<String, ClientboundPDASyncPacket.SCPStatusData> statuses) {
+        scpStatuses.clear();
+        scpStatuses.putAll(statuses);
+    }
+
+    public static ClientboundPDASyncPacket.SCPStatusData getSCPStatus(ResourceLocation scpId) {
+        return scpStatuses.get(scpId.toString());
+    }
+
+    public static Collection<ClientboundPDASyncPacket.SCPStatusData> getAllSCPStatuses() {
+        return List.copyOf(scpStatuses.values());
     }
 
 
